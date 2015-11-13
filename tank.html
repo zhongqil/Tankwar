@@ -18,6 +18,7 @@
     <script type="text/javascript" src="/libs/physi.js"></script>
     <script type="text/javascript" src="/libs/chroma.js"></script>
     <script type="text/javascript" src="/libs/dat.gui.js"></script>
+     <script type="text/javascript" src="/libs/astar.js"></script>
     <script type="text/javascript" src="/tank.js"></script>
 
 
@@ -25,6 +26,7 @@
 
 <body>
 <div id="viewport"></div>
+<progress style="bottom:10;position:absolute" id="health" value="100" max="100"></progress>
 </body>
     <script type="text/javascript">
 
@@ -32,11 +34,77 @@
         Physijs.scripts.worker = '/libs/physijs_worker.js';
         Physijs.scripts.ammo = '/libs/ammo.js';
 
-		game=new Game();
+		
+        var game=new Game();
+        var config = game.config;
+        var controls = new function () {
+               
+                
+                var self=this;
+
+                this.startGame = function () {
+                    
+                    if (!game.running) {
+                        if (game.gameOver!=0)
+                            game=new Game();
+                        game.config = config;
+                        game.start();
+                    }
+                };
+
+                this.addEnemy = function () {
+                    
+                };
+            };
+            
+        var gui = new dat.GUI();
+
+            var generalFolder = gui.addFolder('Map');
+            generalFolder.add(config.map, "rows", 5, 30).step(1);
+            generalFolder.add(config.map, "columns", 5,30).step(1);
+            generalFolder.add(config.map, "wallRatio",0,0.8);
+            generalFolder.add(config.map, "enemyCount", 0,30).step(1);
+            
+
+            var enemyFolder = gui.addFolder('Enemy');
+            enemyFolder.add(config.enemy, "attentiveniss", 0,1.0);
+            enemyFolder.add(config.enemy, "reaction", 0,1.0);
+            enemyFolder.add(config.enemy, "speed", 1,50);
+            enemyFolder.add(config.enemy, "bulletType", [1]);
+            enemyFolder.add(config.enemy, "health", 10,100).step(10);
+            enemyFolder.add(controls, "addEnemy").onChange(controls.addEnemy);
+            
+            var playerFolder = gui.addFolder('Player');
+            playerFolder.add(config.player, "health", 10,100).step(10);
+            playerFolder.add(config.player, "speed", 1,50);
+            playerFolder.add(config.player, "bulletType", [1]);
+            
+            var wallFolder = gui.addFolder('Wall');
+            wallFolder.add(config.wall, "health", 10,100).step(10);
+            
+            var bulletFolder = gui.addFolder('Bullet');
+            bulletFolder.add(config.bullet[1], "damage", 1,100).step(1);
+            bulletFolder.add(config.bullet[1], "power", 1,3).step(1);
+            bulletFolder.add(config.bullet[1], "speed", 10,200).step(10);
+            //enemyFolder.add(controls, "addEnemy").onChange(controls.addEnemy);
+            
+            gui.add(controls, "startGame").onChange(controls.startGame);
+/*
+            var sliderFolder = gui.addFolder('sliders');
+            sliderFolder.add(controls, "sliderLeft").onChange(controls.sliderLeft);
+            sliderFolder.add(controls, "sliderRight").onChange(controls.sliderRight);
+
+            var coneTwistFolder = gui.addFolder('coneTwist');
+            coneTwistFolder.add(controls, "enableConeTwistMotor").onChange(controls.updateCone);
+            coneTwistFolder.add(controls, "motorTargetX", -Math.PI / 2, Math.PI / 2).onChange(controls.updateCone);
+            coneTwistFolder.add(controls, "motorTargetY", -Math.PI / 2, Math.PI / 2).onChange(controls.updateCone);
+            coneTwistFolder.add(controls, "motorTargetZ", -Math.PI / 2, Math.PI / 2).onChange(controls.updateCone);
+
+            var spheresFolder = gui.addFolder('spheres');
+            spheresFolder.add(controls, "clearMeshes").onChange(controls.updateMotor);
+            spheresFolder.add(controls, "addSpheres").onChange(controls.updateMotor);
+*/
         
-
-
-        window.onload = game.start();
 
     </script>
 </html>

@@ -21,7 +21,7 @@
 function pathTo(node){
     var curr = node,
         path = [];
-    while(curr.parent) {
+    while(curr) {
         path.unshift(curr);
         curr = curr.parent;
     }
@@ -54,10 +54,20 @@ var astar = {
 
         var openHeap = getHeap(),
             closestNode = start; // set the start node to be the closest if required
+            
+            
+        var isWall = options.isWall || (function (neighbor) {
+            neighbor.isWall();
+        }) ;
+        
+        var getCost = options.getCost || (function (neighbor) {
+            neighbor.getCost();
+        }) ;
 
         start.h = heuristic(start, end);
 
         openHeap.push(start);
+        graph.markDirty(start);
 
         while(openHeap.size() > 0) {
 
@@ -77,16 +87,18 @@ var astar = {
 
             for (var i = 0, il = neighbors.length; i < il; ++i) {
                 var neighbor = neighbors[i];
+                graph.markDirty(neighbor);
 
-                if (neighbor.closed || neighbor.isWall()) {
+                if (neighbor.closed || isWall(neighbor)) {
                     // Not a valid node to process, skip to next neighbor.
                     continue;
                 }
 
                 // The g score is the shortest distance from start to current node.
                 // We need to check if the path we have arrived at this neighbor is the shortest one we have seen yet.
-                var gScore = currentNode.g + neighbor.getCost(currentNode),
+                var gScore = currentNode.g + getCost(currentNode),
                     beenVisited = neighbor.visited;
+                    
 
                 if (!beenVisited || gScore < neighbor.g) {
 
@@ -96,7 +108,7 @@ var astar = {
                     neighbor.h = neighbor.h || heuristic(neighbor, end);
                     neighbor.g = gScore;
                     neighbor.f = neighbor.g + neighbor.h;
-                    graph.markDirty(neighbor);
+                    
                     if (closest) {
                         // If the neighbour is closer than the current closestNode or if it's equally close but has
                         // a cheaper path than the current closest node then it becomes the closest node
@@ -155,16 +167,16 @@ var astar = {
 * @param {Object} [options]
 * @param {bool} [options.diagonal] Specifies whether diagonal moves are allowed
 */
-function Graph(gridIn, options) {
+function Graph(rows,cols, options) {
     options = options || {};
     this.nodes = [];
     this.diagonal = !!options.diagonal;
     this.grid = [];
-    for (var x = 0; x < gridIn.length; x++) {
+    for (var x = 0; x < rows; x++) {
         this.grid[x] = [];
 
-        for (var y = 0, row = gridIn[x]; y < row.length; y++) {
-            var node = new GridNode(x, y, row[y]);
+        for (var y = 0; y < cols; y++) {
+            var node = new GridNode(x, y);
             this.grid[x][y] = node;
             this.nodes.push(node);
         }
