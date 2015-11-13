@@ -11,10 +11,10 @@
     </asset>
     <library_images>
         <image id="ID5">
-            <init_from>Track.tga</init_from>
+            <init_from>Track.png</init_from>
         </image>
         <image id="ID10">
-            <init_from>Main%20Body.tga</init_from>
+            <init_from>Main_Body.png</init_from>
         </image>
     </library_images>
     <library_effects>

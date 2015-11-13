@@ -398,21 +398,32 @@ Game.prototype = {
         }
     },
     createPlayer: function (i,j) {
-        var loader = new THREE.JSONLoader();
+        //var loader = new THREE.JSONLoader();
         var self = this;
+        var mesh;
+        var loader = new THREE.ColladaLoader();
       ///  loader.load('/assets/model/tank_distribution.json', function (geometry, material) {
-        var texture = THREE.ImageUtils.loadTexture("/assets/textures/animals/dog.jpg");
+        loader.load("/daes/FV510_Warrior/fv510.dae", function (result) {
+            mesh = result.scene.children[0].children[0].clone();
+            mesh.scale.set(1, 1, 1);
+            //console.log(mesh.geometry);
+        //var texture = THREE.ImageUtils.loadTexture("/assets/textures/animals/dog.jpg");
 
             var size = self.map.BOXSIZE;
-            var geometry = new THREE.BoxGeometry(size, size, size);
+          //  var geometry = new THREE.BoxGeometry(size, size, size);
             
-           var material = Physijs.createMaterial(
+           /*var material = Physijs.createMaterial(
                         new THREE.MeshLambertMaterial({ color: 0xFFFFFF, map: texture }),
+                        0, 0);*/
+            var material = Physijs.createMaterial(mesh.material,
                         0, 0);
 
-           var player = new Character(geometry, material,CONST.PLAYER);
-       //     var scale=3.0/geometry.boundingSphere.radius;
-           // player.scale.set(scale, scale, scale);
+            var player = new Character(mesh.geometry, material,CONST.PLAYER);
+            //console.log(mesh.geometry);
+            //console.log(mesh.geometry.boundingSphere);
+            var scale=3.0/401.4057951126266;
+            //console.log(mesh.geometry.boundingSphere.radius);
+            player.scale.set(scale, scale, scale);
             self.setPosition(player,i,j);
             self.scene.add(player);
             var config=this.config.player;
@@ -426,6 +437,7 @@ Game.prototype = {
             self.characters.push(player);
             player.setAngularFactor(new THREE.Vector3(0, 0, 0));
             self.player = player;
+        });
             
 
     //    });
