@@ -27,9 +27,27 @@ if (index > -1) {
 }
 }
 
-CONST = { EMPTY: 0, WALL: 1, PLAYER: 2, ENEMY: 3, STONE: 5, BULLET: 6 }
+CONST = { EMPTY: 0, WALL: 1, PLAYER: 2, ENEMY: 3, STONE: 4, BULLET: 6 }
 CONTROL = { NOACTION: 0, UP: 1, DOWN: 2, LEFT: 3, RIGHT: 4, STOP:5, SHOOT: 6 }
-Map = function () { };
+
+Levels = {
+    Maze :  [
+            [2,0,0,0,0,0,0,0,0,0],
+            [4,4,4,4,4,4,4,4,4,0],
+            [0,0,0,0,0,0,0,0,4,0],
+            [0,4,4,4,4,4,4,0,4,0],
+            [0,4,0,0,3,3,4,0,4,0],
+            [0,4,0,4,3,3,4,0,4,0],
+            [0,4,0,4,4,4,4,0,4,0],
+            [0,4,0,0,0,0,0,0,4,0],
+            [0,4,4,4,4,4,4,4,4,0],
+            [0,0,0,0,0,0,0,0,0,0]
+        ]
+    ,
+    Random: "Random",
+    Custon: "Custom"
+}
+Map = function () { isgrid = false; };
 Map.prototype = {
     BOXSIZE: 6.0,
     getPosition: function (i, j) {
@@ -40,24 +58,31 @@ Map.prototype = {
         var bs = this.BOXSIZE;
         return { i: Math.floor((x + this.width / 2) / bs) , j: Math.floor((z + this.height / 2 ) / bs) }
     },
+    getGridDeviation: function(x, z) {
+        var bs = this.BOXSIZE;
+        return { x: Math.floor((x + this.width / 2) % bs) -bs/2 , y: Math.floor((z + this.height / 2 ) % bs)-bs/2 }
+    },
     getType: function (i, j) {
-        return this.map[i * this.rows + j];
+        return this.isgrid ? this.map[j][i] : this.map[i * this.rows + j];
     },
     setType: function(i, j, t) {
+        if (this.isgrid) 
+        this.map[j][i] = t;
+        else
         this.map[i * this.rows + j] = t;
     },
     isWall: function(i,j) {
-        return this.map[i * this.rows + j]==CONST.WALL;
+        return (this.isgrid ? this.map[j][i] : this.map[i * this.rows + j])==CONST.STONE;
     },
     distance: function (p1,p2) {
         return Math.abs(p1.i-p2.i)+Math.abs(p1.j-p2.j);
     },
-    generateMap: function (r, c, enemy, wallsratio) {
+    generateMap: function (r, c, enemy, wallsratio, stoneratio) {
         var tmp = [];
         for (var i = 0; i < r * c; i++) {
             if (i == 0) tmp[i] = CONST.PLAYER;
             else if (i <= enemy) tmp[i] = CONST.ENEMY;
-            else tmp[i] = Math.random() < wallsratio ? CONST.WALL : CONST.EMPTY;
+            else tmp[i] = Math.random() < wallsratio ? (Math.random() < stoneratio ? CONST.STONE : CONST.WALL) : CONST.EMPTY;
         }
         this.map = tmp.shuffle();
         this.rows = r;
@@ -85,6 +110,11 @@ Map.prototype = {
     },
     loadMap: function (map) {
         this.map = map;
+        this.isgrid=true;
+        this.rows = this.map.length;
+        this.cols = this.map[0].length;
+        this.width = this.cols * this.BOXSIZE;
+        this.height = this.rows * this.BOXSIZE;
         this.searchGrid=new Graph(this.rows,this.cols);
     },
     createGround: function (scene) {
@@ -128,12 +158,13 @@ function HumanController(avatar,up, down, left, right, shoot) {
     this.shoot = shoot;
     this.avatar = avatar;
     this.action = CONTROL.NOACTION;
+    this.fire = false;
 }
 HumanController.prototype = {
     control: function (world) {
-        if (this.action == CONTROL.SHOOT)
+        if (this.fire)
         {
-            this.action = this.avatar.lastdirection;
+            this.fire = false;
             return CONTROL.SHOOT;
         }
         console.log(this.action);
@@ -143,8 +174,7 @@ HumanController.prototype = {
         switch (key) {
 
             case this.shoot:
-            
-             this.action = isdown ? CONTROL.SHOOT : this.avatar.lastdirection;  
+            if (isdown) this.fire = true;  
              break;
 
             case this.up: 
@@ -208,8 +238,9 @@ AIController.prototype = {
         var curdir = this.avatar.lastdirection;
         var changedir = Math.random() < this.dirchange;
         var fire = Math.random() < this.destructiveness;
+        
         //console.log(info);
-        if (info.inline && attack) {
+        if (info.inline && !info.obscured && attack) {
             console.log('Attack');
             if (info.dir==curdir) {
                 return CONTROL.SHOOT;
@@ -272,7 +303,7 @@ function Character(geometry, material,gametype,controller) {
     this.lastdirection = CONTROL.STOP;
 }
 
-Character.prototype = Object.create(Physijs.CylinderMesh.prototype, {
+Character.prototype = Object.create(Physijs.BoxMesh.prototype, {
     getGridPosition: function () {
         return this.map.getGridPosition(this.position.x, this.position, z);
     }
@@ -294,15 +325,28 @@ function Game() {
         rows:15,
         columns:15,
         enemyCount:5,
-        wallRatio:0.2
+        wallRatio:0.2,
+        stoneRatio:0.5
         },
         wall: {
+            strength:1,
+            type:CONST.WALL,
             health:30
+        },
+        stone: {
+            strength:2,
+            type:CONST.STONE,
+            health:10
         },
         bullet: {
             1:{
                 speed:40,
                 power:1,
+                damage:10
+            },
+            2:{
+                speed:40,
+                power:2,
                 damage:10
             }
         },
@@ -311,12 +355,14 @@ function Game() {
             speed:15,
             bulletType:1,
             attentiveniss:0.2,
+            firerate:400,
             reaction:0.4
         },
         player: {
             health:30,
             speed:15,
-            bulletType:1
+            firerate:400,
+            bulletType:2
         }
         }
 }
@@ -324,6 +370,7 @@ function Game() {
 Game.prototype = {
     constructor: Game,
     initScene: function () {
+        
         document.getElementById('viewport').innerHTML = '';
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer = this.renderer;
@@ -360,12 +407,73 @@ Game.prototype = {
 
 
 
-        //var gui = new dat.GUI();
-        //gui.add(controls, 'gravityX', -100, 100);
-        //gui.add(controls, 'gravityY', -100, 100);
-        //gui.add(controls, 'gravityZ', -100, 100);
-        //gui.add(controls, 'resetScene');
+        this.particleGroup = new SPE.Group({
+        		texture: {
+                    value: THREE.ImageUtils.loadTexture('/assets/textures/particles/smokeparticle.png')
+                },
+                blending: THREE.AdditiveBlending
+        	});
+            
+            var emitterSettings = {
+                type: SPE.distributions.SPHERE,
+                position: {
+                    spread: new THREE.Vector3(2),
+                    radius: 1,
+                },
+                velocity: {
+                    value: new THREE.Vector3( 30 )
+                },
+                size: {
+                    value: [ 15, 0 ]
+                },
+                opacity: {
+                    value: [1, 0]
+                },
+                color: {
+                    value: [new THREE.Color('yellow'),new THREE.Color('red')]
+                },
+                particleCount: 50,
+                alive: true,
+                duration: 0.05,
+                maxAge: {
+                    value: 0.3
+                }
+            };
 
+            this.particleGroup.addPool( 10, emitterSettings, false );
+
+            // Add particle group to scene.
+        	this.scene.add( this.particleGroup.mesh );
+
+    },
+    loadModels: function (callback) {
+        var self=this;
+        var loader = new THREE.ColladaLoader();
+        loader.load("/daes/FV510_Warrior/fv510.dae", function (result) {
+            var tankmodel=result.scene.children[0].children[0];
+            self.tank= {geometry:tankmodel.geometry,
+            material:Physijs.createMaterial(tankmodel.material,
+                        0, 0)
+                
+            };
+            var manager = new THREE.LoadingManager();
+            var loader = new THREE.OBJLoader( manager );
+				loader.load( 'bullet.obj', function ( object ) {
+
+					object.traverse( function ( child ) {
+
+						if ( child instanceof THREE.Mesh ) {
+
+							self.bullet=child;
+
+						}
+
+					} );
+                    callback();
+
+				} );
+            
+        });
     },
     setPosition: function (player, i, j) {
         var position = this.map.getPosition(i, j);
@@ -382,54 +490,56 @@ Game.prototype = {
                 var type = map.getType(i,j);
                 switch (type) {
                     case CONST.WALL:
-                        this.createWall(i,j);
+                        this.createWall(i,j,this.config.wall);
+                        
+                        break;
+                    case CONST.STONE:
+                        this.createWall(i,j,this.config.stone);
                         
                         break;
                     case CONST.PLAYER:
-                        this.createPlayer(i,j);
+                        this.createPlayer(i,j,this.config.player);
                         
                         break;
                     case CONST.ENEMY:
-                        this.createEnemy(i,j);
+                        this.createEnemy(i,j,this.config.enemy);
                         
                         break;
                 }
             }
         }
     },
-    createPlayer: function (i,j) {
+    createPlayer: function (i,j,config) {
         //var loader = new THREE.JSONLoader();
         var self = this;
-        var mesh;
-        var loader = new THREE.ColladaLoader();
       ///  loader.load('/assets/model/tank_distribution.json', function (geometry, material) {
-        loader.load("/daes/FV510_Warrior/fv510.dae", function (result) {
-            mesh = result.scene.children[0].children[0].clone();
-            mesh.scale.set(1, 1, 1);
+        
+            //mesh = result.scene.children[0].children[0].clone();
+            //mesh.scale.set(1, 1, 1);
             //console.log(mesh.geometry);
         //var texture = THREE.ImageUtils.loadTexture("/assets/textures/animals/dog.jpg");
 
-            var size = self.map.BOXSIZE;
+          //  var size = self.map.BOXSIZE;
           //  var geometry = new THREE.BoxGeometry(size, size, size);
             
            /*var material = Physijs.createMaterial(
                         new THREE.MeshLambertMaterial({ color: 0xFFFFFF, map: texture }),
                         0, 0);*/
-            var material = Physijs.createMaterial(mesh.material,
-                        0, 0);
-
-            var player = new Character(mesh.geometry, material,CONST.PLAYER);
+            var player = new Character(this.tank.geometry, this.tank.material,CONST.PLAYER);
             //console.log(mesh.geometry);
             //console.log(mesh.geometry.boundingSphere);
-            var scale=3.0/401.4057951126266;
+            var scale=3.0/300;//401.4057951126266;
             //console.log(mesh.geometry.boundingSphere.radius);
             player.scale.set(scale, scale, scale);
             self.setPosition(player,i,j);
             self.scene.add(player);
-            var config=this.config.player;
             player.health=config.health;
             player.speed=config.speed;
+            self.health=document.getElementById('health');
+            self.health.max=player.health;
+            self.health.value=player.health;
             player.bulletType=config.bulletType;
+            player.firerate=config.firerate;
             
             var humancontroller = new HumanController(player, 87, 83, 65, 68, 32);
             self.humancontrollers.push(humancontroller);
@@ -437,37 +547,41 @@ Game.prototype = {
             self.characters.push(player);
             player.setAngularFactor(new THREE.Vector3(0, 0, 0));
             self.player = player;
-        });
+        
             
 
     //    });
         
     },
-    createEnemy: function (i,j) {
-        var size = this.map.BOXSIZE;
-        var geometry = new THREE.BoxGeometry(size, size, size);
-        var material = Physijs.createMaterial(
-                    new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/animals/cat.jpg') }),
-                    0, 0);
+    createEnemy: function (i,j,config) {
+       // var size = this.map.BOXSIZE;
+       // var geometry = new THREE.BoxGeometry(size, size, size);
+       // var material = Physijs.createMaterial(
+       //             new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/animals/cat.jpg') }),
+         //           0, 0);
 
-        var enemy = new Character(geometry, material, CONST.ENEMY);
+        var enemy = new Character(this.tank.geometry, this.tank.material, CONST.ENEMY);
+        var scale=3.0/300;//401.4057951126266;
+            //console.log(mesh.geometry.boundingSphere.radius);
+        enemy.scale.set(scale, scale, scale);
         this.setPosition(enemy,i,j);
         this.scene.add(enemy);
         this.enemycount++;
-        var config=this.config.enemy;
         enemy.health=config.health;
         enemy.speed=config.speed;
         enemy.bulletType=config.bulletType;
+        enemy.firerate=config.firerate;
         enemy.setAngularFactor(new THREE.Vector3(0, 0, 0));
         var aicontroller = new AIController(enemy,config.attentiveniss,config.reaction);
         this.controllers.push(aicontroller);
         this.characters.push(enemy);
     },
-    createWall: function (i,j) {
+    createWall: function (i,j,config) {
         var size = this.map.BOXSIZE;
         var wallGeometry = new THREE.BoxGeometry(size, size, size);
         var wallmaterial = Physijs.createMaterial(
-                    new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/general/brick-wall.jpg') }),
+                    new THREE.MeshPhongMaterial({ map: config.type==CONST.WALL ? THREE.ImageUtils.loadTexture('/assets/textures/general/brick_1.jpg') 
+                    : THREE.ImageUtils.loadTexture('/assets/textures/general/stone.jpg') }),
                     .9, 0);
 
         var wall = new Physijs.BoxMesh(wallGeometry, wallmaterial, 0);
@@ -477,24 +591,26 @@ Game.prototype = {
         wall.position.y = position.y;
         wall.position.z = position.z;
         wall.gridposition = {i:i,j:j};
-        wall.gametype = CONST.WALL;
-        var config=this.config.wall;
+        wall.gametype = config.type;
+        wall.strength=config.strength;
         wall.health=config.health;
         this.scene.add(wall);
         this.walls.push(wall);
     },
     createBullet: function (player) {
         var size = this.map.BOXSIZE;
-        var geometry = new THREE.SphereGeometry(1, 10, 10);
-        var material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        //var geometry = new THREE.SphereGeometry(1, 10, 10);
+        //var material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
 
-        var bullet = new Physijs.SphereMesh(geometry, material, 5);
+        var bullet = new Physijs.SphereMesh(this.bullet.geometry, this.bullet.material, 4);
 
         bullet.position.x = player.position.x + player.curdir.x * 4;
         bullet.position.y = player.position.y;
         bullet.position.z = player.position.z + player.curdir.z * 4;
         this.bullets.push(bullet);
         this.scene.add(bullet);
+        bullet.rotation.set(player.curdir.z* Math.PI/2,0,-player.curdir.x* Math.PI/2);
+        bullet.__dirtyRotation = true;
         self = this;
         bullet.gametype = CONST.BULLET;
         var config=this.config.bullet[player.bulletType] || this.config.bullet[1];
@@ -507,9 +623,12 @@ Game.prototype = {
             if (other_object === this.owner) return;
             switch (other_object.gametype) {
                 case CONST.WALL:
+                case CONST.STONE:
                 var wall=other_object;
+                    if (this.power >= wall.strength)
                     wall.health -= this.damage;
                     if (wall.health <=0) {
+                        self.particleGroup.triggerPoolEmitter( 1, this.position );
                     self.scene.remove(wall);
                     self.walls.remove(wall);
                     self.map.setType(wall.gridposition.i,wall.gridposition.j,CONST.EMPTY);
@@ -517,13 +636,16 @@ Game.prototype = {
                     break;
                 case CONST.BULLET:
                     if (other_object.owner === this.owner) return;
+                    self.particleGroup.triggerPoolEmitter( 1, this.position );
                     self.scene.remove(other_object);
                     self.bullets.remove(other_object);
                     break;
                 case CONST.PLAYER:
                     var player = other_object;
                     player.health-=this.damage;
+                    self.health.value=player.health;
                     if (player.health<=0) {
+                        self.particleGroup.triggerPoolEmitter( 1, this.position );
                     self.gameOver = 2;
                     self.scene.remove(other_object);
                     self.characters.remove(other_object);
@@ -535,6 +657,7 @@ Game.prototype = {
                 var enemy=other_object;
                     enemy.health -= this.damage;
                     if (enemy.health <=0) {
+                        self.particleGroup.triggerPoolEmitter( 1, this.position );
                     self.scene.remove(other_object);
                     self.characters.remove(other_object);
                     self.controllers.remove(other_object.controller);
@@ -554,62 +677,64 @@ Game.prototype = {
         
         return bullet;
     },
+    getVelocityInfo: function(dir) {
+        switch (dir) {
+            case CONTROL.UP: return { x: 0, z: -1 , ay : 0.0 };
+            case CONTROL.DOWN: return { x: 0, z: 1 , ay : Math.PI};
+            case CONTROL.LEFT: return { x: -1, z: 0 , ay : Math.PI / 2};
+            case CONTROL.RIGHT: return { x: 1, z: 0 , ay : -Math.PI / 2};
+        }
+    },
+    getDeviationInfo: function(avatar,dir) {
+        var dev=this.map.getGridDeviation(avatar.position.x,avatar.position.z);
+        avatar.gridposition=this.map.getGridPosition(avatar.position.x,avatar.position.z);
+        var info={needAdjust:false,dev:dev};
+        if (dev.x>1) { info.dir=CONTROL.LEFT; info.needAdjust=CONTROL.RIGHT!=dir;}
+        else if (dev.x<-1) { info.dir=CONTROL.RIGHT; info.needAdjust=CONTROL.LEFT!=dir;}
+        else if (dev.y>1) { info.dir=CONTROL.UP; info.needAdjust=CONTROL.DOWN!=dir;}
+        else if (dev.y<-1) { info.dir=CONTROL.DOWN; info.needAdjust=CONTROL.UP!=dir;}
+        return info;
+    },
     performAction: function (action, player) {
+          var axis = new THREE.Vector3(0,1,0);
+  
+  var quat = new THREE.Quaternion();
         switch (action) {
 
             case CONTROL.SHOOT: /* space */
-                var bullet = this.createBullet(player);
+                var time=Date.now();
+                if (!player.lastfiretime || time-player.lastfiretime >=player.firerate) {
+                    var bullet = this.createBullet(player);
+                    player.lastfiretime=time;
+                    }
                 return;
                 break;
 
-            case CONTROL.UP: /*W*/
+            case CONTROL.UP: 
+            case CONTROL.DOWN:
+            case CONTROL.LEFT:
+            case CONTROL.RIGHT: 
+             //  var dev = this.getDeviationInfo(player,action);
+               //if (dev.needAdjust) {
+                 //  console.log(dev);
+              //     action=dev.dir;
+             //      this.updateRequired=true;
+            //   }
+                var info=this.getVelocityInfo(action);
             
-                 player.curdir = { x: 0, z: -1 };
+                 player.curdir = { x: info.x, z: info.z };
                  
-                if (player.lastdirection !== CONTROL.UP) {
-                    player.rotation.y = Math.PI;
+                if (player.lastdirection !== action) {
+                    player.rotation.set(0, info.ay,0);
                     player.__dirtyRotation = true;
                 } //else {
 
                     
-                    player.setLinearVelocity({ x: 0, y: 0, z: -player.speed });
+                    player.setLinearVelocity({ x: player.speed*info.x, y: 0, z: player.speed*info.z });
             //    }
                 break;
-            case CONTROL.DOWN: /*S*/
-            player.curdir = { x: 0, z: 1 };
-                if (player.lastdirection !== CONTROL.DOWN) {
-                    player.rotation.y = 0;
-                    player.__dirtyRotation = true;
-                } //else {
-                    
-                    player.setLinearVelocity({ x: 0, y: 0, z: player.speed });
-              //  }
-                //hconstraint = player.hconstraint;
-                //hconstraint.enableLinearMotor(-10, 2);
-                break;
-
-            case CONTROL.LEFT: /*A*/
-            player.curdir = { x: -1, z: 0 };
-                if (player.lastdirection !== CONTROL.LEFT) {
-                    player.rotation.y = - Math.PI / 2;
-                    player.__dirtyRotation = true;
-                } //else {
-                    
-
-                    player.setLinearVelocity({ x: -player.speed, y: 0, z: 0 });
-             //   }
-                break;
-            case CONTROL.RIGHT: /*D*/
-            player.curdir = { x: 1, z: 0 };
-                if (player.lastdirection !== CONTROL.RIGHT) {
-                    player.rotation.y = Math.PI / 2;
-                    player.__dirtyRotation = true;
-                }// else {
-                    
-                    player.setLinearVelocity({ x: player.speed, y: 0, z: 0 });
-              //  }
-                break;
-             case CONTROL.STOP: /*D*/
+            
+             case CONTROL.STOP: 
                     player.setLinearVelocity({ x: 0, y: 0, z: 0 });
                 
                 return;
@@ -644,7 +769,7 @@ Game.prototype = {
             
         }
         function keyUpListener(event) {
-            console.log("Key up");
+            //console.log("Key up");
             for (var i = 0; i < self.humancontrollers.length; i++) {
                 var controller = self.humancontrollers[i]
                 if (controller.avatar.isAlive) {
@@ -658,6 +783,16 @@ Game.prototype = {
 
         domElement.addEventListener("keydown", keyDownListener, false);
         domElement.addEventListener("keyup", keyUpListener, false);
+        window.addEventListener( 'resize', function() {
+        	var w = window.innerWidth,
+        		h = window.innerHeight;
+
+        	self.camera.aspect = w / h;
+        	self.camera.updateProjectionMatrix();
+
+        	self.renderer.setSize( w, h );
+        }, false );
+
         domElement.setAttribute("tabindex", 0);
         //domElement.addEventListener("mousemove",mouseMoveListener,false);
     },
@@ -682,10 +817,11 @@ Game.prototype = {
     searchPath: function(avatar,enemy) {
         var path=this.map.search(avatar.gridposition,enemy.gridposition);
         
-        return {path:path,obscured:this.map.getType(path[1].x,path[1].y) != CONST.EMPTY,nextdir:this.getDirection(path[0],path[1])};
+        return {path:path,obscured:path[1]==undefined ? true : this.map.getType(path[1].x,path[1].y) == CONST.WALL || this.map.getType(path[1].x,path[1].y) == CONST.STONE,nextdir:this.getDirection(path[0],path[1])};
     },
     getDirection: function(pos1,pos2) {
-        if (pos1.x < pos2.x) return CONTROL.RIGHT;
+        if (!pos2) return CONTROL.STOP;
+        else if (pos1.x < pos2.x) return CONTROL.RIGHT;
         else if (pos1.x > pos2.x) return CONTROL.LEFT;
         else if (pos1.y < pos2.y) return CONTROL.DOWN;
         else if (pos1.y > pos2.y) return CONTROL.UP;
@@ -701,13 +837,13 @@ Game.prototype = {
         rst.diry=pos.j < enemypos.j ? CONTROL.DOWN : CONTROL.UP ;
         if (pos.i == enemypos.i) {
             rst.dir=rst.diry;
-            for (var i=Math.min(pos.j,enemypos.j)+1;i<Math.max(pos.j,enemypos.j);i++) {
-                if (this.map.isWall(i,j)) rst.obscured=true;
+            for (var j=Math.min(pos.j,enemypos.j)+1;j<Math.max(pos.j,enemypos.j);j++) {
+                if (this.map.isWall(pos.i,j)) rst.obscured=true;
             }
         } else if (pos.j==enemypos.j) {
             rst.dir=rst.dirx;
-            for (var j=Math.min(pos.i,enemypos.i)+1;j<Math.max(pos.i,enemypos.i);j++) {
-                if (this.map.isWall(i,j)) rst.obscured=true;
+            for (var i=Math.min(pos.i,enemypos.i)+1;i<Math.max(pos.i,enemypos.i);i++) {
+                if (this.map.isWall(i,pos.j)) rst.obscured=true;
             }
         }else {
             rst.inline = false;
@@ -730,6 +866,9 @@ Game.prototype = {
             self.map.setType(char.gridposition.i,char.gridposition.j,CONST.EMPTY);
         });
         this.characters.forEach(function (char) {
+            //var gd=self.map.getGridDeviation(char.position.x,char.position.z);
+            //console.log(gd);
+            //if (Math.abs(gd.x)>1 || Math.abs(gd.y)>1) return;
             char.gridposition = self.map.getGridPosition(char.position.x,char.position.z);
             self.map.setType(char.gridposition.i,char.gridposition.j,char.gametype);
         });
@@ -743,28 +882,40 @@ Game.prototype = {
             }
         });
     },
+    loadLevel: function(config,map) {
+        this.map = new Map();
+        this.config = config;
+        var config=this.config.map;
+        if (map instanceof Array) {
+            this.map.loadMap(map);
+        } else {
+            this.map.generateMap(config.rows,config.columns,config.enemyCount,config.wallRatio,config.stoneRatio);
+        }
+    },
     start: function () {
         this.initScene();
-        this.map = new Map();
+        
         this.running = true;
-        var config=this.config.map;
-        this.map.generateMap(config.rows,config.columns,config.enemyCount,config.wallRatio);
         this.map.createGround(this.scene);
-        this.addObjects();
-        this.createEventListeners();
+        this.clock = new THREE.Clock();
         var self = this;
-        this.starttime=Date.now();
-        var time = Date.now();
+        this.loadModels(function() {
+        self.addObjects();
+        self.createEventListeners();
+        var lastupdate = 0.0;
+        var gameover= 0.0;
+        self.clock.start();
         render = function () {
             
-            
-            if (self.running && self.gameOver == 1) {
+            var dt=self.clock.getDelta();
+            if (self.gameOver !=0) gameover +=dt;
+            if (self.running && self.gameOver == 1 && gameover > 2.0) {
                 cancelAnimationFrame(self.id);
                 self.scene=null;
                 self.renderer=null;
                 self.running = false;
                 alert("You Win");
-            } else if (self.running && self.gameOver == 2) {
+            } else if (self.running && self.gameOver == 2 && gameover > 2.0) {
                 cancelAnimationFrame(self.id);
                 self.renderer=null;
                 self.scene=null;
@@ -775,21 +926,25 @@ Game.prototype = {
                 self.renderer.render(self.scene, self.camera);
                 self.render_stats.update();
                 self.scene.simulate(undefined, 1);
+                
+                self.particleGroup.tick( dt );
                 if (self.player) {
                 self.camera.position.x=self.player.position.x;
                 self.camera.position.z=self.player.position.z+40;
                 self.camera.lookAt(self.player.position);
                 self.camera.updateProjectionMatrix();
                 }
-                var newtime = Date.now();
-                var delta = newtime - time;
-                if (delta > 300 && newtime-self.starttime > 2000) {
+                lastupdate += dt;
+                if (self.updateRequired || lastupdate > 0.3 && self.clock.getElapsedTime() > 2.0) {
+                    self.updateRequired = false;
                 self.updateGameState();
-                time = newtime;
+                lastupdate=0.0;
+                
                 }
             }
             
         }
         requestAnimationFrame(render);
+        });
     }
 };

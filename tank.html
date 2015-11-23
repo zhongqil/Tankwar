@@ -13,13 +13,16 @@
     <title>Rigid body - Physijs</title>
 
 
-    <script type="text/javascript" src="/libs/three.js"></script>
+    <script type="text/javascript" src="/libs/THREE-r72.js"></script>
     <script type="text/javascript" src="/libs/stats.js"></script>
     <script type="text/javascript" src="/libs/physi.js"></script>
     <script type="text/javascript" src="/libs/chroma.js"></script>
     <script type="text/javascript" src="/libs/ColladaLoader.js"></script>
     <script type="text/javascript" src="/libs/dat.gui.js"></script>
      <script type="text/javascript" src="/libs/astar.js"></script>
+     <script type="text/javascript" src="/libs/SPE.min.js"></script>
+     <script src="/libs/OBJLoader.js"></script>
+     <script src="/libs/ParallaxShader.js"></script>
     <script type="text/javascript" src="/tank.js"></script>
 
 
@@ -27,7 +30,7 @@
 
 <body>
 <div id="viewport"></div>
-<progress style="bottom:10;position:absolute" id="health" value="100" max="100"></progress>
+<progress style="bottom:0;position:absolute;left:0;right:0;" id="health" value="100" max="100"></progress>
 </body>
     <script type="text/javascript">
 
@@ -38,6 +41,7 @@
 		
         var game=new Game();
         var config = game.config;
+        var level = {map:{}}
         var controls = new function () {
                
                 
@@ -48,7 +52,15 @@
                     if (!game.running) {
                         if (game.gameOver!=0)
                             game=new Game();
-                        game.config = config;
+                        
+                        /*if (level.map == "Random") {
+                            game.loadLevel(level.map);
+                        } else if (level.map === "Custom") {
+                            
+                        } else {
+                            g
+                        }*/
+                        game.loadLevel(config,Levels[level.map]);
                         game.start();
                     }
                 };
@@ -61,9 +73,11 @@
         var gui = new dat.GUI();
 
             var generalFolder = gui.addFolder('Map');
+            generalFolder.add(level, "map", ["Random","Maze","Custom"]);
             generalFolder.add(config.map, "rows", 5, 30).step(1);
             generalFolder.add(config.map, "columns", 5,30).step(1);
             generalFolder.add(config.map, "wallRatio",0,0.8);
+            generalFolder.add(config.map, "stoneRatio",0,1.0);
             generalFolder.add(config.map, "enemyCount", 0,30).step(1);
             
 
@@ -78,7 +92,7 @@
             var playerFolder = gui.addFolder('Player');
             playerFolder.add(config.player, "health", 10,100).step(10);
             playerFolder.add(config.player, "speed", 1,50);
-            playerFolder.add(config.player, "bulletType", [1]);
+            playerFolder.add(config.player, "bulletType", [2]);
             
             var wallFolder = gui.addFolder('Wall');
             wallFolder.add(config.wall, "health", 10,100).step(10);
