@@ -27,7 +27,7 @@ if (index > -1) {
 }
 }
 BOXSIZE = 6.0;
-CONST = { EMPTY: 0, WALL: 1, PLAYER: 2, ENEMY: 3, STONE: 4, BULLET: 6 }
+CONST = { EMPTY: 0, WALL: 1, PLAYER: 2, ENEMY: 3, ALLY:4, STONE: 5, BULLET: 6 }
 CONTROL = { NOACTION: 0, UP: 1, DOWN: 2, LEFT: 3, RIGHT: 4, STOP:5, SHOOT: 6 }
 
 Levels = {
@@ -45,7 +45,7 @@ Levels = {
             [0,0,0,0,0,0,0,0,0,0]
         ]
     ,
-    Custom: "Custom"
+    Empty: "Empty"
 }
 
 KeyMapping = {
@@ -131,11 +131,12 @@ Map.prototype = {
     distance: function (p1,p2) {
         return Math.abs(p1.i-p2.i)+Math.abs(p1.j-p2.j);
     },
-    generateMap: function (r, c, enemy, wallsratio, stoneratio) {
+    generateMap: function (r, c, enemy,ally, wallsratio, stoneratio) {
         var tmp = [];
         for (var i = 0; i < r * c; i++) {
             if (i == 0) tmp[i] = CONST.PLAYER;
             else if (i <= enemy) tmp[i] = CONST.ENEMY;
+            else if (i <= enemy+ally) tmp[i] = CONST.ALLY;
             else tmp[i] = Math.random() < wallsratio ? (Math.random() < stoneratio ? CONST.STONE : CONST.WALL) : CONST.EMPTY;
         }
         this.map = tmp.shuffle();
@@ -182,6 +183,16 @@ Map.prototype = {
         this.width = this.cols * BOXSIZE;
         this.height = this.rows * BOXSIZE;
         this.searchGrid=new Graph(this.rows,this.cols);
+    },
+    toArray: function() {
+        var tmp = [];
+        for (var i = 0; i < this.rows; i++) {
+            tmp[i] = []
+            for (var j = 0; j < this.cols; j++) {
+                tmp[i][j] = this.getType(j,i);
+            }
+        }
+        return tmp;
     }
 };
 
@@ -235,7 +246,7 @@ HumanController.prototype = {
 
 function RandomController(avatar) {
     this.avatar = avatar;
-    this.firerate = Math.random() *0.2;
+    this.firerate = Math.random() *0.1;
     this.dirchange = Math.random() *0.5;
 }
 
@@ -264,6 +275,13 @@ function AIController(avatar,attentiveness,reaction,destructive,dirchange) {
 
 AIController.prototype = {
     control: function (world) {
+        var action = this.getBestAction(world);
+        //adjust to the grid to avoid stuck.
+        var dev = world.getDeviationInfo(this.avatar,action);
+                if (dev.needAdjust) return dev.dir;
+                else return action;
+    },
+    getBestAction: function (world) {
         var attack = Math.random() < this.reaction;
         var findplayer = Math.random() < this.attentiveness;
         
@@ -282,7 +300,7 @@ AIController.prototype = {
             } else  {
                 return info.dir;
             }
-        } else if (!info.inline && findplayer) {
+        } else if ((!info.inline || info.inline && info.obscured) && findplayer) {
             console.log('Find');
             if (this.pathfinding) {
                 var path=world.searchPath(this.avatar,enemy);
@@ -332,7 +350,7 @@ GameObject.prototype.constructor = GameObject;
 
 function Character(geometry, material,gametype,controller) {
     this.isAlive = true;
-    Physijs.CylinderMesh.call(this, geometry, material, 0.2);
+    Physijs.BoxMesh.call(this, geometry, material, 0.2);
     this.gametype = gametype;
     this.controller = controller;
     this.lastdirection = CONTROL.STOP;
@@ -365,6 +383,7 @@ function Game() {
             rows: 15,
             columns: 15,
             enemyCount: 5,
+            allyCount: 1,
             wallRatio: 0.2,
             stoneRatio: 0.5
         },
@@ -391,18 +410,32 @@ function Game() {
             }
         },
         enemy: {
-            health: 10,
+            health: 20,
             speed: 15,
             bulletType: 1,
             attentiveniss: 0.2,
             firerate: 400,
-            reaction: 0.4
+            reaction: 0.4,
+            gameside: CONST.ENEMY,
+            gametype: CONST.ENEMY
         },
-        player: {
+        ally: {
             health: 30,
             speed: 15,
+            bulletType: 1,
+            attentiveniss: 0.8,
             firerate: 400,
-            bulletType: 2
+            reaction: 1.0,
+            gameside: CONST.PLAYER,
+            gametype: CONST.ALLY
+        },
+        player: {
+            health: 40,
+            speed: 15,
+            firerate: 400,
+            bulletType: 2,
+            gameside: CONST.PLAYER,
+            gametype: CONST.PLAYER
         },
         controls: {
             left: 65,
@@ -417,7 +450,7 @@ function Game() {
 Game.prototype = {
     constructor: Game,
     initScene: function () {
-        
+
         document.getElementById('viewport').innerHTML = '';
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer = this.renderer;
@@ -436,11 +469,11 @@ Game.prototype = {
         this.scene.setGravity(new THREE.Vector3(0, -50, 0));
 
         this.camera = new THREE.PerspectiveCamera(
-                35,
-                window.innerWidth / window.innerHeight,
-                1,
-                1000
-        );
+            35,
+            window.innerWidth / window.innerHeight,
+            1,
+            1000
+            );
         this.camera.position.set(0, 50, 60);
         this.camera.lookAt(new THREE.Vector3(0, 0, 0));
 
@@ -452,7 +485,7 @@ Game.prototype = {
         this.bgm = new THREE.Audio(this.listener);
         this.bgm.load('/sounds/BGM.wav');
         this.bgm.setRefDistance(200);
-        this.bgm.autoplay = !this.editormode;
+
         this.bgm.setLoop(true);
 
         this.loseSound = new THREE.Audio(this.listener);
@@ -468,7 +501,7 @@ Game.prototype = {
         this.collisionSound;
 
         this.scene.add(this.camera);
-        
+
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
 
@@ -483,44 +516,46 @@ Game.prototype = {
 
 
         this.particleGroup = new SPE.Group({
-        		texture: {
-                    value: THREE.ImageUtils.loadTexture('/assets/textures/particles/smokeparticle.png')
-                },
-                blending: THREE.AdditiveBlending
-        	});
-            
-            var emitterSettings = {
-                type: SPE.distributions.SPHERE,
-                position: {
-                    spread: new THREE.Vector3(2),
-                    radius: 1,
-                },
-                velocity: {
-                    value: new THREE.Vector3( 30 )
-                },
-                size: {
-                    value: [ 15, 0 ]
-                },
-                opacity: {
-                    value: [1, 0]
-                },
-                color: {
-                    value: [new THREE.Color('yellow'),new THREE.Color('red')]
-                },
-                particleCount: 50,
-                alive: true,
-                duration: 0.05,
-                maxAge: {
-                    value: 0.3
-                }
-            };
+            texture: {
+                value: THREE.ImageUtils.loadTexture('/assets/textures/particles/smokeparticle.png')
+            },
+            blending: THREE.AdditiveBlending
+        });
 
-            this.particleGroup.addPool( 10, emitterSettings, false );
+        var emitterSettings = {
+            type: SPE.distributions.SPHERE,
+            position: {
+                spread: new THREE.Vector3(2),
+                radius: 1,
+            },
+            velocity: {
+                value: new THREE.Vector3(30)
+            },
+            size: {
+                value: [15, 0]
+            },
+            opacity: {
+                value: [1, 0]
+            },
+            color: {
+                value: [new THREE.Color('yellow'), new THREE.Color('red')]
+            },
+            particleCount: 50,
+            alive: true,
+            duration: 0.05,
+            maxAge: {
+                value: 0.3
+            }
+        };
 
-            // Add particle group to scene.
-        	this.scene.add( this.particleGroup.mesh );
+        this.particleGroup.addPool(10, emitterSettings, false);
+
+        // Add particle group to scene.
+        this.scene.add(this.particleGroup.mesh);
         if (this.editormode) {
-            this.editor.material = new THREE.MeshBasicMaterial( { color: 0x00ff00, opacity: 0.5, transparent: true } );
+            this.editor.material = new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: 0.5, transparent: true });
+            this.editor.redmaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: 0.5, transparent: true });
+            this.editor.overlap = false;
         }
 
     },
@@ -562,23 +597,31 @@ Game.prototype = {
             player.curdir = { x: 0, z: -1 };
     },
     addObject: function(i,j,type) {
+        var obj= null;
         switch (type) {
                     case CONST.WALL:
-                        this.createWall(i,j,this.config.wall);
+                        obj = this.createWall(i,j,this.config.wall);
                         
                         break;
                     case CONST.STONE:
-                        this.createWall(i,j,this.config.stone);
+                        obj = this.createWall(i,j,this.config.stone);
                         
                         break;
                     case CONST.PLAYER:
-                        this.createPlayer(i,j,this.config.player);
+                        obj = this.createPlayer(i,j,this.config.player);
                         
                         break;
                     case CONST.ENEMY:
-                        this.createEnemy(i,j,this.config.enemy);
+                        obj = this.createNPC(i,j,this.config.enemy);
                         
                         break;
+                    case CONST.ALLY:
+                        obj = this.createNPC(i,j,this.config.ally);
+                        
+                        break;
+                }
+                if (obj && this.editormode) {
+                    this.editor.objects.push(obj);
                 }
     },
     addObjects: function () {
@@ -589,6 +632,27 @@ Game.prototype = {
                 this.addObject(i,j,type);
             }
         }
+    },
+    removeObject: function(obj) {
+        switch (obj.gametype) {
+                    case CONST.WALL:
+                    case CONST.STONE:
+                        this.removeWall(obj);
+                        
+                        break;
+                    
+                    case CONST.PLAYER:
+                        this.removePlayer();
+                        
+                        break;
+                    case CONST.ENEMY:
+                    case CONST.ALLY:
+                        this.removeNPC(obj);
+                        
+                        break;
+                }
+                
+                
     },
     createPlayer: function (i,j,config) {
         //var loader = new THREE.JSONLoader();
@@ -614,7 +678,7 @@ Game.prototype = {
             var player = new Character(this.tank.geometry, this.tank.material,CONST.PLAYER);
             //console.log(mesh.geometry);
             //console.log(mesh.geometry.boundingSphere);
-            var scale=3.0/300;//401.4057951126266;
+            var scale=3.0/310;//401.4057951126266;
             //console.log(mesh.geometry.boundingSphere.radius);
             player.scale.set(scale, scale, scale);
             self.setPosition(player,i,j);
@@ -622,6 +686,7 @@ Game.prototype = {
             player.add(self.collisionSound);
             player.health=config.health;
             player.speed=config.speed;
+            player.gameside=config.gameside;
             self.health=document.getElementById('health');
             self.health.max=player.health;
             self.health.value=player.health;
@@ -636,34 +701,54 @@ Game.prototype = {
             self.characters.push(player);
             player.setAngularFactor(new THREE.Vector3(0, 0, 0));
             self.player = player;
+            return player;
         
             
 
     //    });
         
     },
-    createEnemy: function (i,j,config) {
-       // var size = this.map.BOXSIZE;
-       // var geometry = new THREE.BoxGeometry(size, size, size);
-       // var material = Physijs.createMaterial(
-       //             new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/animals/cat.jpg') }),
-         //           0, 0);
+    removePlayer: function () {
+        if (!this.player) return;
+        this.scene.remove(this.player);
+        this.characters.remove(this.player);
+        this.controllers.remove(this.player.controller);
+        this.map.setType(this.player.gridposition.i, this.player.gridposition.j, CONST.EMPTY);
+        this.player = null;
+    },
+    createNPC: function (i, j, config) {
+        // var size = this.map.BOXSIZE;
+        // var geometry = new THREE.BoxGeometry(size, size, size);
+        // var material = Physijs.createMaterial(
+        //             new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/animals/cat.jpg') }),
+        //           0, 0);
 
-        var enemy = new Character(this.tank.geometry, this.tank.material, CONST.ENEMY);
-        var scale=3.0/300;//401.4057951126266;
-            //console.log(mesh.geometry.boundingSphere.radius);
+        var enemy = new Character(this.tank.geometry, this.tank.material, config.gametype);
+        var scale = 3.0 / 310;//401.4057951126266;
+        //console.log(mesh.geometry.boundingSphere.radius);
         enemy.scale.set(scale, scale, scale);
-        this.setPosition(enemy,i,j);
+        this.setPosition(enemy, i, j);
         this.scene.add(enemy);
-        this.enemycount++;
-        enemy.health=config.health;
-        enemy.speed=config.speed;
-        enemy.bulletType=config.bulletType;
-        enemy.firerate=config.firerate;
+        if (config.gametype == CONST.ENEMY)
+            this.enemycount++;
+        enemy.health = config.health;
+        enemy.speed = config.speed;
+        enemy.gameside = config.gameside;
+        enemy.bulletType = config.bulletType;
+        enemy.firerate = config.firerate;
         enemy.setAngularFactor(new THREE.Vector3(0, 0, 0));
-        var aicontroller = new AIController(enemy,config.attentiveniss,config.reaction);
+        var aicontroller = new AIController(enemy, config.attentiveniss, config.reaction);
         this.controllers.push(aicontroller);
         this.characters.push(enemy);
+        return enemy;
+    },
+    removeNPC: function (enemy) {
+        this.scene.remove(enemy);
+        this.characters.remove(enemy);
+        this.controllers.remove(enemy.controller);
+        this.map.setType(enemy.gridposition.i, enemy.gridposition.j, CONST.EMPTY);
+        if (enemy.gameside == CONST.ENEMY)
+            this.enemycount--;
     },
     createWall: function (i,j,config) {
         var wallGeometry = new THREE.BoxGeometry(BOXSIZE, BOXSIZE, BOXSIZE);
@@ -684,6 +769,12 @@ Game.prototype = {
         wall.health=config.health;
         this.scene.add(wall);
         this.walls.push(wall);
+        return wall;
+    },
+    removeWall:function(wall) {
+        this.scene.remove(wall);
+        this.walls.remove(wall);
+        this.map.setType(wall.gridposition.i,wall.gridposition.j,CONST.EMPTY);
     },
     createBullet: function (player) {
         var size = BOXSIZE;
@@ -697,14 +788,14 @@ Game.prototype = {
         bullet.position.z = player.position.z + player.curdir.z * 4;
         this.bullets.push(bullet);
         this.scene.add(bullet);
-        bullet.rotation.set(player.curdir.z* Math.PI/2,0,-player.curdir.x* Math.PI/2);
+        bullet.rotation.set(player.curdir.z * Math.PI / 2, 0, -player.curdir.x * Math.PI / 2);
         bullet.__dirtyRotation = true;
         self = this;
         bullet.gametype = CONST.BULLET;
-        var config=this.config.bullet[player.bulletType] || this.config.bullet[1];
+        var config = this.config.bullet[player.bulletType] || this.config.bullet[1];
         bullet.damage = config.damage;
-        bullet.power= config.power;
-        bullet.owner=player;
+        bullet.power = config.power;
+        bullet.owner = player;
         bullet.setLinearFactor(new THREE.Vector3(1, 0, 1));
         bullet.setLinearVelocity({ x: player.curdir.x * config.speed, y: 0, z: player.curdir.z * config.speed })
         bullet.addEventListener('collision', function (other_object, relative_velocity, relative_rotation, contact_normal) {
@@ -716,68 +807,60 @@ Game.prototype = {
             switch (other_object.gametype) {
                 case CONST.WALL:
                 case CONST.STONE:
-                var wall=other_object;
+                    var wall = other_object;
                     if (this.power >= wall.strength)
-                    wall.health -= this.damage;
-                    if (wall.health <=0) {
-                        self.particleGroup.triggerPoolEmitter( 1, this.position );
-                    self.scene.remove(wall);
-                    self.walls.remove(wall);
-                    self.map.setType(wall.gridposition.i,wall.gridposition.j,CONST.EMPTY);
+                        wall.health -= this.damage;
+                    if (wall.health <= 0) {
+                        self.particleGroup.triggerPoolEmitter(1, this.position);
+                        self.removeWall(wall);
                     }
                     break;
                 case CONST.BULLET:
                     if (other_object.owner === this.owner) return;
-                    self.particleGroup.triggerPoolEmitter( 1, this.position );
+                    self.particleGroup.triggerPoolEmitter(1, this.position);
                     self.scene.remove(other_object);
                     self.bullets.remove(other_object);
                     break;
                 case CONST.PLAYER:
                     var player = other_object;
-                    player.health-=this.damage;
-                    self.health.value=player.health;
-                    if (player.health<=0) {
-                        self.particleGroup.triggerPoolEmitter( 1, this.position );
-                    self.gameOver = 2;
-                    self.scene.remove(other_object);
-                    self.characters.remove(other_object);
-                    self.controllers.remove(other_object.controller);
-                    other_object.isAlive = false;
+                    player.health -= this.damage;
+                    self.health.value = player.health;
+                    if (player.health <= 0) {
+                        self.particleGroup.triggerPoolEmitter(1, this.position);
+                        self.gameOver = 2;
+                        self.removePlayer();
                     }
                     break;
                 case CONST.ENEMY:
-                var enemy=other_object;
+                case CONST.ALLY:
+                    var enemy = other_object;
                     enemy.health -= this.damage;
-                    if (enemy.health <=0) {
-                        self.particleGroup.triggerPoolEmitter( 1, this.position );
-                    self.scene.remove(other_object);
-                    self.characters.remove(other_object);
-                    self.controllers.remove(other_object.controller);
-                    other_object.isAlive = false;
-                    self.enemycount--;
-                    if (self.enemycount==0) self.gameOver = 1;
+                    if (enemy.health <= 0) {
+                        self.particleGroup.triggerPoolEmitter(1, this.position);
+                        self.removeNPC(enemy);
+                        if (self.enemycount == 0) self.gameOver = 1;
                     }
                     break;
                 default:
                     break;
             }
-                    self.scene.remove(this);
-                    self.bullets.remove(this);                
-            
+            self.scene.remove(this);
+            self.bullets.remove(this);
+
 
         });
-        
+
         return bullet;
     },
     createGround: function () {
         var ground_material = Physijs.createMaterial(
-                new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/ground/grasslight-big.jpg') }),
-                .2, .0);
+            new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/ground/grasslight-big.jpg') }),
+            .2, .0);
         var width = this.map.width;
         var height = this.map.height;
-        var ground = new Physijs.BoxMesh(new THREE.BoxGeometry(width,2, height), ground_material, 0);
-        ground.position.y=-1;
-        
+        var ground = new Physijs.BoxMesh(new THREE.BoxGeometry(width, 2, height), ground_material, 0);
+        ground.position.y = -1;
+
 
         var borderLeft = new Physijs.BoxMesh(new THREE.BoxGeometry(2, 3, height), ground_material, 0);
         borderLeft.position.x = -width / 2 - 1;
@@ -805,70 +888,64 @@ Game.prototype = {
 
         this.scene.add(ground);
     },
-    getVelocityInfo: function(dir) {
+    getVelocityInfo: function (dir) {
         switch (dir) {
-            case CONTROL.UP: return { x: 0, z: -1 , ay : 0.0 };
-            case CONTROL.DOWN: return { x: 0, z: 1 , ay : Math.PI};
-            case CONTROL.LEFT: return { x: -1, z: 0 , ay : Math.PI / 2};
-            case CONTROL.RIGHT: return { x: 1, z: 0 , ay : -Math.PI / 2};
+            case CONTROL.UP: return { x: 0, z: -1, ay: 0.0 };
+            case CONTROL.DOWN: return { x: 0, z: 1, ay: Math.PI };
+            case CONTROL.LEFT: return { x: -1, z: 0, ay: Math.PI / 2 };
+            case CONTROL.RIGHT: return { x: 1, z: 0, ay: -Math.PI / 2 };
         }
     },
-    getDeviationInfo: function(avatar,dir) {
-        var dev=this.map.getGridDeviation(avatar.position.x,avatar.position.z);
-        avatar.gridposition=this.map.getGridPosition(avatar.position.x,avatar.position.z);
-        var info={needAdjust:false,dev:dev};
-        if (dev.x>1) { info.dir=CONTROL.LEFT; info.needAdjust=CONTROL.RIGHT!=dir;}
-        else if (dev.x<-1) { info.dir=CONTROL.RIGHT; info.needAdjust=CONTROL.LEFT!=dir;}
-        else if (dev.y>1) { info.dir=CONTROL.UP; info.needAdjust=CONTROL.DOWN!=dir;}
-        else if (dev.y<-1) { info.dir=CONTROL.DOWN; info.needAdjust=CONTROL.UP!=dir;}
+    getDeviationInfo: function (avatar, dir) {
+        var dev = this.map.getGridDeviation(avatar.position.x, avatar.position.z);
+        var info = { needAdjust: false, dev: dev };
+        if (dev.x > 1) { info.dir = CONTROL.LEFT; info.needAdjust = dir == CONTROL.UP || dir == CONTROL.DOWN; }
+        else if (dev.x < -1) { info.dir = CONTROL.RIGHT; info.needAdjust = dir == CONTROL.UP || dir == CONTROL.DOWN; }
+        else if (dev.y > 1) { info.dir = CONTROL.UP; info.needAdjust = dir == CONTROL.LEFT || dir == CONTROL.RIGHT; }
+        else if (dev.y < -1) { info.dir = CONTROL.DOWN; info.needAdjust = dir == CONTROL.LEFT || dir == CONTROL.RIGHT; }
         return info;
     },
     performAction: function (action, player) {
-          var axis = new THREE.Vector3(0,1,0);
-  
-  var quat = new THREE.Quaternion();
+        var axis = new THREE.Vector3(0, 1, 0);
+
+        var quat = new THREE.Quaternion();
         switch (action) {
 
             case CONTROL.SHOOT: /* space */
-                var time=Date.now();
-                if (!player.lastfiretime || time-player.lastfiretime >=player.firerate) {
+                var time = Date.now();
+                if (!player.lastfiretime || time - player.lastfiretime >= player.firerate) {
                     var bullet = this.createBullet(player);
-                    player.lastfiretime=time;
-                    }
+                    player.lastfiretime = time;
+                }
                 return;
                 break;
 
-            case CONTROL.UP: 
+            case CONTROL.UP:
             case CONTROL.DOWN:
             case CONTROL.LEFT:
-            case CONTROL.RIGHT: 
-             //  var dev = this.getDeviationInfo(player,action);
-               //if (dev.needAdjust) {
-                 //  console.log(dev);
-              //     action=dev.dir;
-             //      this.updateRequired=true;
-            //   }
-                var info=this.getVelocityInfo(action);
-            
-                 player.curdir = { x: info.x, z: info.z };
-                 
+            case CONTROL.RIGHT:
+
+                var info = this.getVelocityInfo(action);
+
+                player.curdir = { x: info.x, z: info.z };
+
                 if (player.lastdirection !== action) {
-                    player.rotation.set(0, info.ay,0);
+                    player.rotation.set(0, info.ay, 0);
                     player.__dirtyRotation = true;
                 } //else {
 
                     
-                    player.setLinearVelocity({ x: player.speed*info.x, y: 0, z: player.speed*info.z });
-            //    }
+                player.setLinearVelocity({ x: player.speed * info.x, y: 0, z: player.speed * info.z });
+                //    }
                 break;
-            
-             case CONTROL.STOP: 
-                    player.setLinearVelocity({ x: 0, y: 0, z: 0 });
-                
+
+            case CONTROL.STOP:
+                player.setLinearVelocity({ x: 0, y: 0, z: 0 });
+
                 return;
             default: return;
         }
-        player.lastdirection=action;
+        player.lastdirection = action;
     },
     createEventListeners: function () {
         var domElement = document.getElementById("viewport");
@@ -877,7 +954,7 @@ Game.prototype = {
         function mouseMoveListener(event) {
             event.preventDefault();
 
-            if (self.editor.curobject) {
+            if (self.editormode && self.editor.curobject) {
                 self.mouse.set((event.clientX / window.innerWidth) * 2 - 1, - (event.clientY / window.innerHeight) * 2 + 1);
 
                 self.raycaster.setFromCamera(self.mouse, self.camera);
@@ -889,6 +966,9 @@ Game.prototype = {
                         var gpos = self.map.getGridPosition(intersect.point.x,intersect.point.z);
                         var pos = self.map.getPosition(gpos.i,gpos.j);
 						self.editor.curobject.position.copy(pos);
+                        if (self.map.getType(gpos.i,gpos.j)==CONST.EMPTY) {
+                            self.editor.curobject.material = self.editor.material;
+                        } else self.editor.curobject.material = self.editor.redmaterial;
                     }
                 });
 
@@ -897,7 +977,7 @@ Game.prototype = {
         
         function mouseDownListener(event) {
             event.preventDefault();
-            if (self.editor.curobject) {
+            if (self.editormode && self.editor.curobject && event.button == 0) {
 
 				self.mouse.set( ( event.clientX / window.innerWidth ) * 2 - 1, - ( event.clientY / window.innerHeight ) * 2 + 1 );
 
@@ -906,17 +986,28 @@ Game.prototype = {
 				var intersects = self.raycaster.intersectObjects( self.editor.objects );
                 
                 intersects.forEach(function(intersect) {
-                    if (intersect.object=self.editor.ground) {
+                    if (intersect.object==self.editor.ground && !self.editor.removeobj) {
                         var gpos = self.map.getGridPosition(intersect.point.x,intersect.point.z);
-                        self.addObject(gpos.i,gpos.j,self.editor.type);
+                        if (self.map.getType(gpos.i,gpos.j)!=CONST.EMPTY) {
+                            return;
+                        }
+                        if (self.editor.type == CONST.PLAYER) {
+                            self.removePlayer();
+                        }
+                        var obj=self.addObject(gpos.i,gpos.j,self.editor.type);
+                        self.map.setType(gpos.i,gpos.j,self.editor.type);
+                    } else if (intersect.object!=self.editor.ground && self.editor.removeobj) {
+                        self.removeObject(intersect.object);
+                        self.editor.objects.remove(intersect.object);
                     }
                 });
+                self.drawMinimap();
             }
 
         }
 
         function keyDownListener(event) {
-            console.log("Key down");
+            //console.log("Key down");
             if (self.editormode) {
                 switch(event.keyCode) {
                     case self.config.controls.left:
@@ -931,12 +1022,15 @@ Game.prototype = {
                     case self.config.controls.down:
                     self.camera.position.z +=1;
                     break;
+                    case 16: //shift
+                    self.editor.removeobj = true;
+                    break;
                 }
 
             } else {
                 for (var i = 0; i < self.humancontrollers.length; i++) {
                     var controller = self.humancontrollers[i]
-                    if (controller.avatar.isAlive) {
+                    if (controller.avatar.health > 0) {
                         controller.keyPress(event.keyCode, true);
                         var action = controller.control(self);
                         self.performAction(action, controller.avatar);
@@ -947,19 +1041,27 @@ Game.prototype = {
         }
         function keyUpListener(event) {
             //console.log("Key up");
+            if (self.editormode) {
+                switch(event.keyCode) {
+                    case 16: //shift
+                    self.editor.removeobj = false;
+                    break;
+                }
+
+            } else {
             for (var i = 0; i < self.humancontrollers.length; i++) {
                 var controller = self.humancontrollers[i]
-                if (controller.avatar.isAlive) {
+                if (controller.avatar.health > 0) {
                     controller.keyPress(event.keyCode, false);
                     var action = controller.control(self);
                     self.performAction(action, controller.avatar);
                 }
             }
+            }
 
         }
         
         function scrollListener(event) {
-            //console.log("Key up");
             return;
 
         }
@@ -1002,6 +1104,8 @@ Game.prototype = {
                 object = new THREE.Mesh(wallGeometry, this.editor.material);
                 break;
             case CONST.ENEMY:
+            case CONST.ALLY:
+            case CONST.PLAYER:
                 object = new THREE.Mesh(this.tank.geometry, this.editor.material);
                 var scale = 3.0 / 300;//401.4057951126266;
                 //console.log(mesh.geometry.boundingSphere.radius);
@@ -1018,7 +1122,7 @@ Game.prototype = {
         var enemy = null, mdist=null;
         var self=this;
         this.characters.forEach(function (char) {
-            if (char.gametype == avatar.gametype) return;
+            if (char.gameside == avatar.gameside) return;
             else if (enemy == null) {
                 enemy=char;
                 mdist=self.map.distance(enemy.gridposition,avatar.gridposition);
@@ -1076,6 +1180,7 @@ Game.prototype = {
     updateGameState: function() {
         
         this.updateMap();
+        this.drawMinimap();
         this.updateControllers();
     },
     updateMap: function() {
@@ -1094,11 +1199,50 @@ Game.prototype = {
     updateControllers: function () {
         var self=this;
         this.controllers.forEach(function (controller) {
-            if (controller.avatar.isAlive) {
+            if (controller.avatar.health > 0) {
                 var action = controller.control(self);
                 self.performAction(action, controller.avatar);
             }
         });
+    },
+    drawMinimap: function () {
+        var scale = 10;
+        var width = scale*this.map.rows;
+        var height = scale*this.map.cols;
+        this.minimap.width = width;
+        this.minimap.height = height;
+        this.ctx.clearRect(0,0,width,height);
+        this.ctx.strokeStyle = "#ffffff";
+        this.ctx.lineWidth = 2.0;
+        this.ctx.strokeRect(0,0,scale*this.map.rows,scale*this.map.cols);
+        for (var i=0;i<this.map.rows;i++) {
+            for (var j=0;j<this.map.cols;j++) {
+                var type=this.map.getType(i,j);
+                switch (type) {
+                    case CONST.PLAYER:
+                    this.ctx.fillStyle = "#00ff00";
+                    break;
+                    case CONST.ENEMY:
+                    this.ctx.fillStyle = "#ff0000";
+                    break;
+                    case CONST.ALLY:
+                    this.ctx.fillStyle = "#0000ff";
+                    break;
+                    case CONST.WALL:
+                    this.ctx.fillStyle = "#c0c0c0";
+                    break;
+                    case CONST.STONE:
+                    this.ctx.fillStyle = "#ffffff";
+                    break;
+                    default:
+                    continue;
+                }
+                
+                this.ctx.fillRect(i*scale,j*scale,scale,scale);
+            }
+        }
+         
+        
     },
     loadLevel: function(config,map) {
         this.map = new Map();
@@ -1106,12 +1250,20 @@ Game.prototype = {
         var config=this.config.map;
         if (map instanceof Array) {
             this.map.loadMap(map);
-        } else if (map=='Custom') {
+        } else if (map=='Empty') {
             this.map.generateEmptyMap(config.rows,config.columns);
             this.editormode = true;
         } else {
-            this.map.generateMap(config.rows,config.columns,config.enemyCount,config.wallRatio,config.stoneRatio);
+            this.map.generateMap(config.rows,config.columns,config.enemyCount,config.allyCount,config.wallRatio,config.stoneRatio);
         }
+    },
+    exitEditor: function() {
+        if (this.editor.curobject) {
+            this.scene.remove(this.editor.curobject);
+            this.curobject = null;
+        }
+        this.editormode=false;
+        this.bgm.play();
     },
     start: function () {
         this.initScene();
@@ -1119,12 +1271,17 @@ Game.prototype = {
         this.running = true;
         this.createGround(this.scene);
         this.clock = new THREE.Clock();
+        this.minimap =  document.getElementById('minimap');
+        this.ctx = minimap.getContext('2d');
         var self = this;
         this.loadModels(function() {
         self.addObjects();
+        self.drawMinimap();
         self.createEventListeners();
         var lastupdate = 0.0;
         var gameover= 0.0;
+        if (!self.editormode)
+                self.bgm.play();
         self.clock.start();
         render = function () {
             if (self.editormode) {
