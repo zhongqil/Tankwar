@@ -51,8 +51,8 @@ Levels = {
 KeyMapping = {
     Space:32,
     'Left Arrow':37,
-    'Right Arrow':38,
-    'Up Arrow':39,
+    'Up Arrow':38,
+    'Right Arrow':39,
     'Down Arrow':40,
     0:48,
     1:48,
@@ -357,61 +357,61 @@ function Game() {
     this.pathgraph = null;
     this.editormode = false;
     this.editor = {
-        objects:[],
-        type:CONST.EMPTY
+        objects: [],
+        type: CONST.EMPTY
     }
     this.config = {
         map: {
-        rows:15,
-        columns:15,
-        enemyCount:5,
-        wallRatio:0.2,
-        stoneRatio:0.5
+            rows: 15,
+            columns: 15,
+            enemyCount: 5,
+            wallRatio: 0.2,
+            stoneRatio: 0.5
         },
         wall: {
-            strength:1,
-            type:CONST.WALL,
-            health:30
+            strength: 1,
+            type: CONST.WALL,
+            health: 30
         },
         stone: {
-            strength:2,
-            type:CONST.STONE,
-            health:10
+            strength: 2,
+            type: CONST.STONE,
+            health: 30
         },
         bullet: {
-            1:{
-                speed:40,
-                power:1,
-                damage:10
+            1: {
+                speed: 40,
+                power: 1,
+                damage: 10
             },
-            2:{
-                speed:40,
-                power:2,
-                damage:10
+            2: {
+                speed: 40,
+                power: 2,
+                damage: 10
             }
         },
         enemy: {
-            health:10,
-            speed:15,
-            bulletType:1,
-            attentiveniss:0.2,
-            firerate:400,
-            reaction:0.4
+            health: 10,
+            speed: 15,
+            bulletType: 1,
+            attentiveniss: 0.2,
+            firerate: 400,
+            reaction: 0.4
         },
         player: {
-            health:30,
-            speed:15,
-            firerate:400,
-            bulletType:2
+            health: 30,
+            speed: 15,
+            firerate: 400,
+            bulletType: 2
         },
         controls: {
-            left:65, 
-            right:68, 
-            up:87, 
-            down:83, 
-            shoot:32
+            left: 65,
+            right: 68,
+            up: 87,
+            down: 83,
+            shoot: 32
         }
-        }
+    }
 }
 
 Game.prototype = {
@@ -443,15 +443,40 @@ Game.prototype = {
         );
         this.camera.position.set(0, 50, 60);
         this.camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        this.listener = new THREE.AudioListener();
+        this.camera.add(this.listener);
+
+        this.playerlistener = new THREE.AudioListener();
+
+        this.bgm = new THREE.Audio(this.listener);
+        this.bgm.load('/sounds/BGM.wav');
+        this.bgm.setRefDistance(200);
+        this.bgm.autoplay = !this.editormode;
+        this.bgm.setLoop(true);
+
+        this.loseSound = new THREE.Audio(this.listener);
+        this.loseSound.load('/sounds/lose.mp3');
+        this.loseSound.setRefDistance(200);
+        this.loseSound.setVolume(10);
+
+        this.winSound = new THREE.Audio(this.listener);
+        this.winSound.load('/sounds/win.mp3');
+        this.winSound.setRefDistance(200);
+        this.winSound.setVolume(10);
+
+        this.collisionSound;
+
         this.scene.add(this.camera);
         
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
 
+        //sound.setRolloffFactor(1);
+
         // Light
         var light = new THREE.SpotLight(0xFFFFFF);
         light.position.set(20, 100, 50);
-
 
         this.scene.add(light);
 
@@ -502,7 +527,7 @@ Game.prototype = {
     loadModels: function (callback) {
         var self=this;
         var loader = new THREE.ColladaLoader();
-        loader.load("/daes/FV510_Warrior/fv510.dae", function (result) {
+        loader.load("/assets/models/fv510.dae", function (result) {
             var tankmodel=result.scene.children[0].children[0];
             self.tank= {geometry:tankmodel.geometry,
             material:Physijs.createMaterial(tankmodel.material,
@@ -511,7 +536,7 @@ Game.prototype = {
             };
             var manager = new THREE.LoadingManager();
             var loader = new THREE.OBJLoader( manager );
-				loader.load( '/models/bullet.obj', function ( object ) {
+				loader.load( '/assets/models/bullet.obj', function ( object ) {
 
 					object.traverse( function ( child ) {
 
@@ -581,6 +606,11 @@ Game.prototype = {
            /*var material = Physijs.createMaterial(
                         new THREE.MeshLambertMaterial({ color: 0xFFFFFF, map: texture }),
                         0, 0);*/
+            self.collisionSound = new THREE.Audio(this.listener);
+            self.collisionSound.load('/sounds/explodeEffect.ogg');
+            self.collisionSound.setRefDistance(40);
+            self.collisionSound.setRolloffFactor(2);
+
             var player = new Character(this.tank.geometry, this.tank.material,CONST.PLAYER);
             //console.log(mesh.geometry);
             //console.log(mesh.geometry.boundingSphere);
@@ -589,6 +619,7 @@ Game.prototype = {
             player.scale.set(scale, scale, scale);
             self.setPosition(player,i,j);
             self.scene.add(player);
+            player.add(self.collisionSound);
             player.health=config.health;
             player.speed=config.speed;
             self.health=document.getElementById('health');
@@ -677,6 +708,10 @@ Game.prototype = {
         bullet.setLinearFactor(new THREE.Vector3(1, 0, 1));
         bullet.setLinearVelocity({ x: player.curdir.x * config.speed, y: 0, z: player.curdir.z * config.speed })
         bullet.addEventListener('collision', function (other_object, relative_velocity, relative_rotation, contact_normal) {
+            //console.log(self.collisionSound.getVolume());
+            self.collisionSound.setVolume(10);
+            self.collisionSound.play();
+            this.add(self.collisionSound);
             if (other_object === this.owner) return;
             switch (other_object.gametype) {
                 case CONST.WALL:
@@ -882,15 +917,33 @@ Game.prototype = {
 
         function keyDownListener(event) {
             console.log("Key down");
-            for (var i = 0; i < self.humancontrollers.length;i++) {
-                var controller = self.humancontrollers[i]
-                if (controller.avatar.isAlive) {
-                    controller.keyPress(event.keyCode, true);
-                    var action = controller.control(self);
-                    self.performAction(action, controller.avatar);
+            if (self.editormode) {
+                switch(event.keyCode) {
+                    case self.config.controls.left:
+                    self.camera.position.x -=1;
+                    break;
+                    case self.config.controls.right:
+                    self.camera.position.x +=1;
+                    break;
+                    case self.config.controls.up:
+                    self.camera.position.z -=1;
+                    break;
+                    case self.config.controls.down:
+                    self.camera.position.z +=1;
+                    break;
+                }
+
+            } else {
+                for (var i = 0; i < self.humancontrollers.length; i++) {
+                    var controller = self.humancontrollers[i]
+                    if (controller.avatar.isAlive) {
+                        controller.keyPress(event.keyCode, true);
+                        var action = controller.control(self);
+                        self.performAction(action, controller.avatar);
+                    }
                 }
             }
-            
+
         }
         function keyUpListener(event) {
             //console.log("Key up");
@@ -904,9 +957,16 @@ Game.prototype = {
             }
 
         }
+        
+        function scrollListener(event) {
+            //console.log("Key up");
+            return;
+
+        }
 
         domElement.addEventListener("keydown", keyDownListener, false);
         domElement.addEventListener("keyup", keyUpListener, false);
+        window.addEventListener("scroll", scrollListener, false);
         window.addEventListener( 'resize', function() {
         	var w = window.innerWidth,
         		h = window.innerHeight;
@@ -1078,12 +1138,16 @@ Game.prototype = {
                     self.scene = null;
                     self.renderer = null;
                     self.running = false;
+                    self.bgm.stop();
+                    self.winSound.play();
                     alert("You Win");
                 } else if (self.running && self.gameOver == 2 && gameover > 2.0) {
                     cancelAnimationFrame(self.id);
                     self.renderer = null;
                     self.scene = null;
                     self.running = false;
+                    self.bgm.stop();
+                    self.loseSound.play();
                     alert("Game Over");
                 } else {
                     self.id = requestAnimationFrame(render);
