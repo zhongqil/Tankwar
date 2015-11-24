@@ -462,12 +462,23 @@ Game.prototype = {
         this.listener = new THREE.AudioListener();
         this.camera.add(this.listener);
 
+        this.playerlistener = new THREE.AudioListener();
+
+        this.bgm = new THREE.Audio(this.listener);
+        this.bgm.load('/sounds/BGM.wav');
+        this.bgm.setRefDistance(200);
+        this.bgm.autoplay = true;
+        this.bgm.setLoop(true);
+
+        this.collisionSound;
+
         this.scene.add(this.camera);
+
+        //sound.setRolloffFactor(1);
 
         // Light
         var light = new THREE.SpotLight(0xFFFFFF);
         light.position.set(20, 100, 50);
-
 
         this.scene.add(light);
 
@@ -591,6 +602,10 @@ Game.prototype = {
            /*var material = Physijs.createMaterial(
                         new THREE.MeshLambertMaterial({ color: 0xFFFFFF, map: texture }),
                         0, 0);*/
+            self.collisionSound = new THREE.Audio(this.listener);
+            self.collisionSound.load('/sounds/explodeEffect.ogg');
+            self.collisionSound.setRefDistance(40);
+            self.collisionSound.setRolloffFactor(2);
 
             var player = new Character(this.tank.geometry, this.tank.material,CONST.PLAYER);
             //console.log(mesh.geometry);
@@ -599,17 +614,8 @@ Game.prototype = {
             //console.log(mesh.geometry.boundingSphere.radius);
             player.scale.set(scale, scale, scale);
             self.setPosition(player,i,j);
-
             self.scene.add(player);
-
-            var sound = new THREE.Audio(self.listener);
-            sound.load('/sounds/BGM.wav');
-            sound.setRefDistance(200);
-            sound.autoplay = true;
-            sound.setLoop(true);
-            //sound.setRolloffFactor(1);
-            player.add(sound);
-
+            player.add(self.collisionSound);
             player.health=config.health;
             player.speed=config.speed;
             self.health=document.getElementById('health');
@@ -699,6 +705,10 @@ Game.prototype = {
         bullet.setLinearFactor(new THREE.Vector3(1, 0, 1));
         bullet.setLinearVelocity({ x: player.curdir.x * config.speed, y: 0, z: player.curdir.z * config.speed })
         bullet.addEventListener('collision', function (other_object, relative_velocity, relative_rotation, contact_normal) {
+            //console.log(self.collisionSound.getVolume());
+            self.collisionSound.setVolume(10);
+            self.collisionSound.play();
+            this.add(self.collisionSound);
             if (other_object === this.owner) return;
             switch (other_object.gametype) {
                 case CONST.WALL:
