@@ -47,6 +47,61 @@ Levels = {
     Random: "Random",
     Custon: "Custom"
 }
+
+KeyMapping = {
+    Space:32,
+    'Left Arrow':37,
+    'Right Arrow':38,
+    'Up Arrow':39,
+    'Down Arrow':40,
+    0:48,
+    1:48,
+    2:50,
+    3:51,
+    4:52,
+    5:53,
+    6:54,
+    7:55,
+    8:56,
+    9:57,
+    A:65,
+    B:66,
+    C:67,
+    D:68,
+    E:69,
+    F:70,
+    G:71,
+    H:72,
+    I:73,
+    J:74,
+    K:75,
+    L:76,
+    M:77,
+    N:78,
+    O:79,
+    P:80,
+    Q:81,
+    R:82,
+    S:83,
+    T:84,
+    U:85,
+    V:86,
+    W:87,
+    X:88,
+    Y:89,
+    Z:90,
+    ';':186,
+    '=':187,
+    ',':188,
+    '-':189,
+    '.':190,
+    '/':191,
+    '`':192,
+    '[':219,
+    '\\':220,
+    ']':221,
+    "'":222,
+}
 Map = function () { isgrid = false; };
 Map.prototype = {
     BOXSIZE: 6.0,
@@ -150,7 +205,7 @@ Map.prototype = {
     }
 };
 
-function HumanController(avatar,up, down, left, right, shoot) {
+function HumanController(avatar,left, right, up, down, shoot) {
     this.left = left;
     this.right = right;
     this.up = up;
@@ -363,6 +418,13 @@ function Game() {
             speed:15,
             firerate:400,
             bulletType:2
+        },
+        controls: {
+            left:65, 
+            right:68, 
+            up:87, 
+            down:83, 
+            shoot:32
         }
         }
 }
@@ -458,7 +520,7 @@ Game.prototype = {
             };
             var manager = new THREE.LoadingManager();
             var loader = new THREE.OBJLoader( manager );
-				loader.load( 'bullet.obj', function ( object ) {
+				loader.load( '/models/bullet.obj', function ( object ) {
 
 					object.traverse( function ( child ) {
 
@@ -541,7 +603,9 @@ Game.prototype = {
             player.bulletType=config.bulletType;
             player.firerate=config.firerate;
             
-            var humancontroller = new HumanController(player, 87, 83, 65, 68, 32);
+            var conf=this.config.controls;
+            
+            var humancontroller = new HumanController(player, conf.left, conf.right, conf.up, conf.down, conf.shoot);
             self.humancontrollers.push(humancontroller);
            // self.controllers.push(humancontroller);
             self.characters.push(player);
