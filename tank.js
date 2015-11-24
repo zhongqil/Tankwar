@@ -470,6 +470,16 @@ Game.prototype = {
         this.bgm.autoplay = true;
         this.bgm.setLoop(true);
 
+        this.loseSound = new THREE.Audio(this.listener);
+        this.loseSound.load('/sounds/lose.mp3');
+        this.loseSound.setRefDistance(200);
+        this.loseSound.setVolume(10);
+
+        this.winSound = new THREE.Audio(this.listener);
+        this.winSound.load('/sounds/win.mp3');
+        this.winSound.setRefDistance(200);
+        this.winSound.setVolume(10);
+
         this.collisionSound;
 
         this.scene.add(this.camera);
@@ -1003,12 +1013,16 @@ Game.prototype = {
                 self.scene=null;
                 self.renderer=null;
                 self.running = false;
+                self.bgm.stop();
+                self.winSound.play();
                 alert("You Win");
             } else if (self.running && self.gameOver == 2 && gameover > 2.0) {
                 cancelAnimationFrame(self.id);
                 self.renderer=null;
                 self.scene=null;
                 self.running = false;
+                self.bgm.stop();
+                self.loseSound.play();
                 alert("Game Over");
             } else {
                 self.id=requestAnimationFrame(render);
