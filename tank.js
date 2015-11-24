@@ -20,12 +20,13 @@ Array.prototype.shuffle = function () {
 }
 
 Array.prototype.remove = function (element) {
-var index = this.indexOf(element);
+    var index = this.indexOf(element);
 
-if (index > -1) {
-    this.splice(index, 1);
+    if (index > -1) {
+        this.splice(index, 1);
+    }
 }
-}
+
 BOXSIZE = 6.0;
 CONST = { EMPTY: 0, WALL: 1, PLAYER: 2, ENEMY: 3, ALLY:4, STONE: 5, BULLET: 6 }
 CONTROL = { NOACTION: 0, UP: 1, DOWN: 2, LEFT: 3, RIGHT: 4, STOP:5, SHOOT: 6 }
@@ -51,8 +52,8 @@ Levels = {
 KeyMapping = {
     Space:32,
     'Left Arrow':37,
-    'Up Arrow':38,
-    'Right Arrow':39,
+    'Right Arrow':38,
+    'Up Arrow':39,
     'Down Arrow':40,
     0:48,
     1:48,
@@ -104,16 +105,17 @@ KeyMapping = {
 }
 Map = function () { isgrid = false; };
 Map.prototype = {
+    BOXSIZE: 6.0,
     getPosition: function (i, j) {
-        var bs = BOXSIZE;
+        var bs = this.BOXSIZE;
         return { x: i * bs + bs / 2 - this.width/2, y: bs / 2, z: j * bs + bs / 2 - this.height/2 }
     },
     getGridPosition: function(x, z) {
-        var bs = BOXSIZE;
+        var bs = this.BOXSIZE;
         return { i: Math.floor((x + this.width / 2) / bs) , j: Math.floor((z + this.height / 2 ) / bs) }
     },
     getGridDeviation: function(x, z) {
-        var bs = BOXSIZE;
+        var bs = this.BOXSIZE;
         return { x: Math.floor((x + this.width / 2) % bs) -bs/2 , y: Math.floor((z + this.height / 2 ) % bs)-bs/2 }
     },
     getType: function (i, j) {
@@ -142,20 +144,8 @@ Map.prototype = {
         this.map = tmp.shuffle();
         this.rows = r;
         this.cols = c;
-        this.width = c * BOXSIZE;
-        this.height = r * BOXSIZE;
-        this.searchGrid=new Graph(this.rows,this.cols);
-    },
-    generateEmptyMap: function (r, c) {
-        var tmp = [];
-        for (var i = 0; i < r * c; i++) {
-            tmp[i] = CONST.EMPTY;
-        }
-        this.map = tmp.shuffle();
-        this.rows = r;
-        this.cols = c;
-        this.width = c * BOXSIZE;
-        this.height = r * BOXSIZE;
+        this.width = c * this.BOXSIZE;
+        this.height = r * this.BOXSIZE;
         this.searchGrid=new Graph(this.rows,this.cols);
     },
     search: function(gp1,gp2) {
@@ -180,8 +170,8 @@ Map.prototype = {
         this.isgrid=true;
         this.rows = this.map.length;
         this.cols = this.map[0].length;
-        this.width = this.cols * BOXSIZE;
-        this.height = this.rows * BOXSIZE;
+        this.width = this.cols * this.BOXSIZE;
+        this.height = this.rows * this.BOXSIZE;
         this.searchGrid=new Graph(this.rows,this.cols);
     },
     toArray: function() {
@@ -373,11 +363,6 @@ function Game() {
     this.enemycount = 0;
     this.player = null;
     this.pathgraph = null;
-    this.editormode = false;
-    this.editor = {
-        objects: [],
-        type: CONST.EMPTY
-    }
     this.config = {
         map: {
             rows: 15,
@@ -388,25 +373,25 @@ function Game() {
             stoneRatio: 0.5
         },
         wall: {
-            strength: 1,
-            type: CONST.WALL,
-            health: 30
+            strength:1,
+            type:CONST.WALL,
+            health:30
         },
         stone: {
-            strength: 2,
-            type: CONST.STONE,
-            health: 30
+            strength:2,
+            type:CONST.STONE,
+            health:10
         },
         bullet: {
-            1: {
-                speed: 40,
-                power: 1,
-                damage: 10
+            1:{
+                speed:40,
+                power:1,
+                damage:10
             },
-            2: {
-                speed: 40,
-                power: 2,
-                damage: 10
+            2:{
+                speed:40,
+                power:2,
+                damage:10
             }
         },
         enemy: {
@@ -438,13 +423,13 @@ function Game() {
             gametype: CONST.PLAYER
         },
         controls: {
-            left: 65,
-            right: 68,
-            up: 87,
-            down: 83,
-            shoot: 32
+            left:65, 
+            right:68, 
+            up:87, 
+            down:83, 
+            shoot:32
         }
-    }
+        }
 }
 
 Game.prototype = {
@@ -511,6 +496,7 @@ Game.prototype = {
         var light = new THREE.SpotLight(0xFFFFFF);
         light.position.set(20, 100, 50);
 
+
         this.scene.add(light);
 
 
@@ -550,6 +536,7 @@ Game.prototype = {
 
         this.particleGroup.addPool(10, emitterSettings, false);
 
+
         // Add particle group to scene.
         this.scene.add(this.particleGroup.mesh);
         if (this.editormode) {
@@ -562,7 +549,7 @@ Game.prototype = {
     loadModels: function (callback) {
         var self=this;
         var loader = new THREE.ColladaLoader();
-        loader.load("/assets/models/fv510.dae", function (result) {
+        loader.load("/daes/FV510_Warrior/fv510.dae", function (result) {
             var tankmodel=result.scene.children[0].children[0];
             self.tank= {geometry:tankmodel.geometry,
             material:Physijs.createMaterial(tankmodel.material,
@@ -570,23 +557,25 @@ Game.prototype = {
                 
             };
             var manager = new THREE.LoadingManager();
-            var loader = new THREE.OBJLoader( manager );
-				loader.load( '/assets/models/bullet.obj', function ( object ) {
-
-					object.traverse( function ( child ) {
-
-						if ( child instanceof THREE.Mesh ) {
-
-							self.bullet=child;
-
+			var loader = new THREE.ColladaLoader();
+			loader.load("/daes/T-90/T90l.dae",function (result){
+				var tankmodel=result.scene.children[0].children[0];
+				console.log(tankmodel);
+				self.tank2={geometry:tankmodel.geometry,
+					material:Physijs.createMaterial(tankmodel.material,0,0)
+				};
+				var loader = new THREE.OBJLoader(manager);
+				loader.load( '/models/bullet.obj', function ( object ) {
+					object.traverse(function(child){
+						if (child instanceof THREE.Mesh){
+							self.bullet = child;
 						}
-
-					} );
-                    callback();
-
-				} );
+					});
+					callback();
+			});
             
         });
+		});	
     },
     setPosition: function (player, i, j) {
         var position = this.map.getPosition(i, j);
@@ -596,6 +585,7 @@ Game.prototype = {
             player.position.z = position.z;
             player.curdir = { x: 0, z: -1 };
     },
+    
     addObject: function(i,j,type) {
         var obj= null;
         switch (type) {
@@ -623,15 +613,8 @@ Game.prototype = {
                 if (obj && this.editormode) {
                     this.editor.objects.push(obj);
                 }
-    },
-    addObjects: function () {
-        var map = this.map;
-        for (var i = 0; i < map.rows; i++) {
-            for (var j = 0; j < map.cols; j++) {
-                var type = map.getType(i,j);
-                this.addObject(i,j,type);
-            }
-        }
+            
+        
     },
     removeObject: function(obj) {
         switch (obj.gametype) {
@@ -670,10 +653,6 @@ Game.prototype = {
            /*var material = Physijs.createMaterial(
                         new THREE.MeshLambertMaterial({ color: 0xFFFFFF, map: texture }),
                         0, 0);*/
-            self.collisionSound = new THREE.Audio(this.listener);
-            self.collisionSound.load('/sounds/explodeEffect.ogg');
-            self.collisionSound.setRefDistance(40);
-            self.collisionSound.setRolloffFactor(2);
 
             var player = new Character(this.tank.geometry, this.tank.material,CONST.PLAYER);
             //console.log(mesh.geometry);
@@ -682,8 +661,17 @@ Game.prototype = {
             //console.log(mesh.geometry.boundingSphere.radius);
             player.scale.set(scale, scale, scale);
             self.setPosition(player,i,j);
+
             self.scene.add(player);
-            player.add(self.collisionSound);
+
+            var sound = new THREE.Audio(self.listener);
+            sound.load('/sounds/BGM.wav');
+            sound.setRefDistance(200);
+            sound.autoplay = true;
+            sound.setLoop(true);
+            //sound.setRolloffFactor(1);
+            player.add(sound);
+
             player.health=config.health;
             player.speed=config.speed;
             player.gameside=config.gameside;
@@ -695,7 +683,7 @@ Game.prototype = {
             
             var conf=this.config.controls;
             
-            var humancontroller = new HumanController(player, parseInt(conf.left), parseInt(conf.right), parseInt(conf.up),parseInt( conf.down), parseInt(conf.shoot));
+            var humancontroller = new HumanController(player, conf.left, conf.right, conf.up, conf.down, conf.shoot);
             self.humancontrollers.push(humancontroller);
            // self.controllers.push(humancontroller);
             self.characters.push(player);
@@ -723,14 +711,21 @@ Game.prototype = {
         //             new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/animals/cat.jpg') }),
         //           0, 0);
 
-        var enemy = new Character(this.tank.geometry, this.tank.material, config.gametype);
+        var enemy = null;
+        if (config.gametype == CONST.ENEMY) {
+            enemy =  new Character(this.tank.geometry, this.tank.material, CONST.ENEMY);
+            this.enemycount++;
+        } else {
+            enemy = new Character(this.tank2.geometry, this.tank2.material, CONST.ALLY);
+        }
+            
+        
         var scale = 3.0 / 310;//401.4057951126266;
         //console.log(mesh.geometry.boundingSphere.radius);
         enemy.scale.set(scale, scale, scale);
         this.setPosition(enemy, i, j);
         this.scene.add(enemy);
-        if (config.gametype == CONST.ENEMY)
-            this.enemycount++;
+        
         enemy.health = config.health;
         enemy.speed = config.speed;
         enemy.gameside = config.gameside;
@@ -751,7 +746,8 @@ Game.prototype = {
             this.enemycount--;
     },
     createWall: function (i,j,config) {
-        var wallGeometry = new THREE.BoxGeometry(BOXSIZE, BOXSIZE, BOXSIZE);
+        var size = this.map.BOXSIZE;
+        var wallGeometry = new THREE.BoxGeometry(size, size, size);
         var wallmaterial = Physijs.createMaterial(
                     new THREE.MeshPhongMaterial({ map: config.type==CONST.WALL ? THREE.ImageUtils.loadTexture('/assets/textures/general/brick_1.jpg') 
                     : THREE.ImageUtils.loadTexture('/assets/textures/general/stone.jpg') }),
@@ -777,7 +773,7 @@ Game.prototype = {
         this.map.setType(wall.gridposition.i,wall.gridposition.j,CONST.EMPTY);
     },
     createBullet: function (player) {
-        var size = BOXSIZE;
+        var size = this.map.BOXSIZE;
         //var geometry = new THREE.SphereGeometry(1, 10, 10);
         //var material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
 
@@ -799,10 +795,6 @@ Game.prototype = {
         bullet.setLinearFactor(new THREE.Vector3(1, 0, 1));
         bullet.setLinearVelocity({ x: player.curdir.x * config.speed, y: 0, z: player.curdir.z * config.speed })
         bullet.addEventListener('collision', function (other_object, relative_velocity, relative_rotation, contact_normal) {
-            //console.log(self.collisionSound.getVolume());
-            self.collisionSound.setVolume(10);
-            self.collisionSound.play();
-            this.add(self.collisionSound);
             if (other_object === this.owner) return;
             switch (other_object.gametype) {
                 case CONST.WALL:
@@ -1037,7 +1029,7 @@ Game.prototype = {
                     }
                 }
             }
-
+            
         }
         function keyUpListener(event) {
             //console.log("Key up");
@@ -1060,7 +1052,6 @@ Game.prototype = {
             }
 
         }
-        
         function scrollListener(event) {
             return;
 
@@ -1068,7 +1059,6 @@ Game.prototype = {
 
         domElement.addEventListener("keydown", keyDownListener, false);
         domElement.addEventListener("keyup", keyUpListener, false);
-        window.addEventListener("scroll", scrollListener, false);
         window.addEventListener( 'resize', function() {
         	var w = window.innerWidth,
         		h = window.innerHeight;
@@ -1284,51 +1274,43 @@ Game.prototype = {
                 self.bgm.play();
         self.clock.start();
         render = function () {
-            if (self.editormode) {
-                self.id = requestAnimationFrame(render);
-                self.renderer.render(self.scene, self.camera);
+            
+            var dt=self.clock.getDelta();
+            if (self.gameOver !=0) gameover +=dt;
+            if (self.running && self.gameOver == 1 && gameover > 2.0) {
+                cancelAnimationFrame(self.id);
+                self.scene=null;
+                self.renderer=null;
+                self.running = false;
+                alert("You Win");
+            } else if (self.running && self.gameOver == 2 && gameover > 2.0) {
+                cancelAnimationFrame(self.id);
+                self.renderer=null;
+                self.scene=null;
+                self.running = false;
+                alert("Game Over");
             } else {
-                var dt = self.clock.getDelta();
-                if (self.gameOver != 0) gameover += dt;
-                if (self.running && self.gameOver == 1 && gameover > 2.0) {
-                    cancelAnimationFrame(self.id);
-                    self.scene = null;
-                    self.renderer = null;
-                    self.running = false;
-                    self.bgm.stop();
-                    self.winSound.play();
-                    alert("You Win");
-                } else if (self.running && self.gameOver == 2 && gameover > 2.0) {
-                    cancelAnimationFrame(self.id);
-                    self.renderer = null;
-                    self.scene = null;
-                    self.running = false;
-                    self.bgm.stop();
-                    self.loseSound.play();
-                    alert("Game Over");
-                } else {
-                    self.id = requestAnimationFrame(render);
-                    self.renderer.render(self.scene, self.camera);
-                    self.render_stats.update();
-                    self.scene.simulate(undefined, 1);
-
-                    self.particleGroup.tick(dt);
-                    if (self.player) {
-                        self.camera.position.x = self.player.position.x;
-                        self.camera.position.z = self.player.position.z + 40;
-                        self.camera.lookAt(self.player.position);
-                        self.camera.updateProjectionMatrix();
-                    }
-                    lastupdate += dt;
-                    if (self.updateRequired || lastupdate > 0.3 && self.clock.getElapsedTime() > 2.0) {
-                        self.updateRequired = false;
-                        self.updateGameState();
-                        lastupdate = 0.0;
-
-                    }
+                self.id=requestAnimationFrame(render);
+                self.renderer.render(self.scene, self.camera);
+                self.render_stats.update();
+                self.scene.simulate(undefined, 1);
+                
+                self.particleGroup.tick( dt );
+                if (self.player) {
+                self.camera.position.x=self.player.position.x;
+                self.camera.position.z=self.player.position.z+40;
+                self.camera.lookAt(self.player.position);
+                self.camera.updateProjectionMatrix();
                 }
-
+                lastupdate += dt;
+                if (self.updateRequired || lastupdate > 0.3 && self.clock.getElapsedTime() > 2.0) {
+                    self.updateRequired = false;
+                self.updateGameState();
+                lastupdate=0.0;
+                
+                }
             }
+            
         }
         requestAnimationFrame(render);
         });
