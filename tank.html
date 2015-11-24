@@ -19,23 +19,21 @@
     <script type="text/javascript" src="/libs/chroma.js"></script>
     <script type="text/javascript" src="/libs/ColladaLoader.js"></script>
     <script type="text/javascript" src="/libs/dat.gui.js"></script>
-     <script type="text/javascript" src="/libs/astar.js"></script>
-     <script type="text/javascript" src="/libs/SPE.min.js"></script>
-     <script src="/libs/OBJLoader.js"></script>
-     <script src="/libs/ParallaxShader.js"></script>
+    <script type="text/javascript" src="/libs/astar.js"></script>
+    <script type="text/javascript" src="/libs/SPE.min.js"></script>
+    <script src="/libs/OBJLoader.js"></script>
+    <script src="/libs/ParallaxShader.js"></script>
     <script type="text/javascript" src="/tank.js"></script>
 
 
 </head>
 
 <body>
-<div id="viewport"></div>
-<progress style="bottom:0;position:absolute;left:0;right:0;" id="health" value="100" max="100"></progress>
+    <div id="viewport"></div>
+    <progress style="bottom:0;position:absolute;left:0;right:0;" id="health" value="100" max="100"></progress>
 </body>
-    <script type="text/javascript">
-
-        
-        Physijs.scripts.worker = '/libs/physijs_worker.js';
+<script type="text/javascript">
+    Physijs.scripts.worker = '/libs/physijs_worker.js';
         Physijs.scripts.ammo = '/libs/ammo.js';
 
 		
@@ -103,6 +101,13 @@
             bulletFolder.add(config.bullet[1], "speed", 10,200).step(10);
             //enemyFolder.add(controls, "addEnemy").onChange(controls.addEnemy);
             
+            var controlFolder = gui.addFolder('Controls');
+            controlFolder.add(config.controls, "left", KeyMapping);
+            controlFolder.add(config.controls, "right", KeyMapping);
+            controlFolder.add(config.controls, "up", KeyMapping);
+            controlFolder.add(config.controls, "down", KeyMapping);
+            controlFolder.add(config.controls, "shoot", KeyMapping);
+            
             gui.add(controls, "startGame").onChange(controls.startGame);
 /*
             var sliderFolder = gui.addFolder('sliders');
@@ -119,7 +124,6 @@
             spheresFolder.add(controls, "clearMeshes").onChange(controls.updateMotor);
             spheresFolder.add(controls, "addSpheres").onChange(controls.updateMotor);
 */
-        
+</script>
 
-    </script>
 </html>
