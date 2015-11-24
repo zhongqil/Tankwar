@@ -396,6 +396,10 @@ Game.prototype = {
         );
         this.camera.position.set(0, 50, 60);
         this.camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        this.listener = new THREE.AudioListener();
+        this.camera.add(this.listener);
+
         this.scene.add(this.camera);
 
         // Light
@@ -525,6 +529,7 @@ Game.prototype = {
            /*var material = Physijs.createMaterial(
                         new THREE.MeshLambertMaterial({ color: 0xFFFFFF, map: texture }),
                         0, 0);*/
+
             var player = new Character(this.tank.geometry, this.tank.material,CONST.PLAYER);
             //console.log(mesh.geometry);
             //console.log(mesh.geometry.boundingSphere);
@@ -532,7 +537,17 @@ Game.prototype = {
             //console.log(mesh.geometry.boundingSphere.radius);
             player.scale.set(scale, scale, scale);
             self.setPosition(player,i,j);
+
             self.scene.add(player);
+
+            var sound = new THREE.Audio(self.listener);
+            sound.load('/sounds/BGM.wav');
+            sound.setRefDistance(200);
+            sound.autoplay = true;
+            sound.setLoop(true);
+            //sound.setRolloffFactor(1);
+            player.add(sound);
+
             player.health=config.health;
             player.speed=config.speed;
             self.health=document.getElementById('health');
