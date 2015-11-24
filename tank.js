@@ -26,11 +26,12 @@ if (index > -1) {
     this.splice(index, 1);
 }
 }
-
+BOXSIZE = 6.0;
 CONST = { EMPTY: 0, WALL: 1, PLAYER: 2, ENEMY: 3, STONE: 4, BULLET: 6 }
 CONTROL = { NOACTION: 0, UP: 1, DOWN: 2, LEFT: 3, RIGHT: 4, STOP:5, SHOOT: 6 }
 
 Levels = {
+    Random: "Random",
     Maze :  [
             [2,0,0,0,0,0,0,0,0,0],
             [4,4,4,4,4,4,4,4,4,0],
@@ -44,8 +45,7 @@ Levels = {
             [0,0,0,0,0,0,0,0,0,0]
         ]
     ,
-    Random: "Random",
-    Custon: "Custom"
+    Custom: "Custom"
 }
 
 KeyMapping = {
@@ -104,17 +104,16 @@ KeyMapping = {
 }
 Map = function () { isgrid = false; };
 Map.prototype = {
-    BOXSIZE: 6.0,
     getPosition: function (i, j) {
-        var bs = this.BOXSIZE;
+        var bs = BOXSIZE;
         return { x: i * bs + bs / 2 - this.width/2, y: bs / 2, z: j * bs + bs / 2 - this.height/2 }
     },
     getGridPosition: function(x, z) {
-        var bs = this.BOXSIZE;
+        var bs = BOXSIZE;
         return { i: Math.floor((x + this.width / 2) / bs) , j: Math.floor((z + this.height / 2 ) / bs) }
     },
     getGridDeviation: function(x, z) {
-        var bs = this.BOXSIZE;
+        var bs = BOXSIZE;
         return { x: Math.floor((x + this.width / 2) % bs) -bs/2 , y: Math.floor((z + this.height / 2 ) % bs)-bs/2 }
     },
     getType: function (i, j) {
@@ -142,8 +141,20 @@ Map.prototype = {
         this.map = tmp.shuffle();
         this.rows = r;
         this.cols = c;
-        this.width = c * this.BOXSIZE;
-        this.height = r * this.BOXSIZE;
+        this.width = c * BOXSIZE;
+        this.height = r * BOXSIZE;
+        this.searchGrid=new Graph(this.rows,this.cols);
+    },
+    generateEmptyMap: function (r, c) {
+        var tmp = [];
+        for (var i = 0; i < r * c; i++) {
+            tmp[i] = CONST.EMPTY;
+        }
+        this.map = tmp.shuffle();
+        this.rows = r;
+        this.cols = c;
+        this.width = c * BOXSIZE;
+        this.height = r * BOXSIZE;
         this.searchGrid=new Graph(this.rows,this.cols);
     },
     search: function(gp1,gp2) {
@@ -168,40 +179,9 @@ Map.prototype = {
         this.isgrid=true;
         this.rows = this.map.length;
         this.cols = this.map[0].length;
-        this.width = this.cols * this.BOXSIZE;
-        this.height = this.rows * this.BOXSIZE;
+        this.width = this.cols * BOXSIZE;
+        this.height = this.rows * BOXSIZE;
         this.searchGrid=new Graph(this.rows,this.cols);
-    },
-    createGround: function (scene) {
-        var ground_material = Physijs.createMaterial(
-                new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/ground/grasslight-big.jpg') }),
-                .2, .0);
-        var width = this.BOXSIZE * this.cols;
-        var height = this.BOXSIZE * this.rows;
-        var ground = new Physijs.BoxMesh(new THREE.BoxGeometry(width,2, height), ground_material, 0);
-        ground.position.y=-1;
-
-        var borderLeft = new Physijs.BoxMesh(new THREE.BoxGeometry(2, 3, height), ground_material, 0);
-        borderLeft.position.x = -width / 2 - 1;
-        borderLeft.position.y = 2;
-        ground.add(borderLeft);
-
-        var borderRight = new Physijs.BoxMesh(new THREE.BoxGeometry(2, 3, height), ground_material, 0);
-        borderRight.position.x = width / 2 + 1;
-        borderRight.position.y = 2;
-        ground.add(borderRight);
-
-        var borderBottom = new Physijs.BoxMesh(new THREE.BoxGeometry(width + 4, 3, 2), ground_material, 0);
-        borderBottom.position.z = height / 2 + 1;
-        borderBottom.position.y = 2;
-        ground.add(borderBottom);
-
-        var borderTop = new Physijs.BoxMesh(new THREE.BoxGeometry(width + 4, 3, 2), ground_material, 0);
-        borderTop.position.z = -height / 2 - 1;
-        borderTop.position.y = 2;
-        ground.add(borderTop);
-
-        scene.add(ground);
     }
 };
 
@@ -375,6 +355,11 @@ function Game() {
     this.enemycount = 0;
     this.player = null;
     this.pathgraph = null;
+    this.editormode = false;
+    this.editor = {
+        objects:[],
+        type:CONST.EMPTY
+    }
     this.config = {
         map: {
         rows:15,
@@ -459,6 +444,9 @@ Game.prototype = {
         this.camera.position.set(0, 50, 60);
         this.camera.lookAt(new THREE.Vector3(0, 0, 0));
         this.scene.add(this.camera);
+        
+        this.raycaster = new THREE.Raycaster();
+        this.mouse = new THREE.Vector2();
 
         // Light
         var light = new THREE.SpotLight(0xFFFFFF);
@@ -506,6 +494,9 @@ Game.prototype = {
 
             // Add particle group to scene.
         	this.scene.add( this.particleGroup.mesh );
+        if (this.editormode) {
+            this.editor.material = new THREE.MeshBasicMaterial( { color: 0x00ff00, opacity: 0.5, transparent: true } );
+        }
 
     },
     loadModels: function (callback) {
@@ -545,12 +536,8 @@ Game.prototype = {
             player.position.z = position.z;
             player.curdir = { x: 0, z: -1 };
     },
-    addObjects: function () {
-        var map = this.map;
-        for (var i = 0; i < map.rows; i++) {
-            for (var j = 0; j < map.cols; j++) {
-                var type = map.getType(i,j);
-                switch (type) {
+    addObject: function(i,j,type) {
+        switch (type) {
                     case CONST.WALL:
                         this.createWall(i,j,this.config.wall);
                         
@@ -568,6 +555,13 @@ Game.prototype = {
                         
                         break;
                 }
+    },
+    addObjects: function () {
+        var map = this.map;
+        for (var i = 0; i < map.rows; i++) {
+            for (var j = 0; j < map.cols; j++) {
+                var type = map.getType(i,j);
+                this.addObject(i,j,type);
             }
         }
     },
@@ -605,7 +599,7 @@ Game.prototype = {
             
             var conf=this.config.controls;
             
-            var humancontroller = new HumanController(player, conf.left, conf.right, conf.up, conf.down, conf.shoot);
+            var humancontroller = new HumanController(player, parseInt(conf.left), parseInt(conf.right), parseInt(conf.up),parseInt( conf.down), parseInt(conf.shoot));
             self.humancontrollers.push(humancontroller);
            // self.controllers.push(humancontroller);
             self.characters.push(player);
@@ -641,8 +635,7 @@ Game.prototype = {
         this.characters.push(enemy);
     },
     createWall: function (i,j,config) {
-        var size = this.map.BOXSIZE;
-        var wallGeometry = new THREE.BoxGeometry(size, size, size);
+        var wallGeometry = new THREE.BoxGeometry(BOXSIZE, BOXSIZE, BOXSIZE);
         var wallmaterial = Physijs.createMaterial(
                     new THREE.MeshPhongMaterial({ map: config.type==CONST.WALL ? THREE.ImageUtils.loadTexture('/assets/textures/general/brick_1.jpg') 
                     : THREE.ImageUtils.loadTexture('/assets/textures/general/stone.jpg') }),
@@ -662,7 +655,7 @@ Game.prototype = {
         this.walls.push(wall);
     },
     createBullet: function (player) {
-        var size = this.map.BOXSIZE;
+        var size = BOXSIZE;
         //var geometry = new THREE.SphereGeometry(1, 10, 10);
         //var material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
 
@@ -741,6 +734,42 @@ Game.prototype = {
         
         return bullet;
     },
+    createGround: function () {
+        var ground_material = Physijs.createMaterial(
+                new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/ground/grasslight-big.jpg') }),
+                .2, .0);
+        var width = this.map.width;
+        var height = this.map.height;
+        var ground = new Physijs.BoxMesh(new THREE.BoxGeometry(width,2, height), ground_material, 0);
+        ground.position.y=-1;
+        
+
+        var borderLeft = new Physijs.BoxMesh(new THREE.BoxGeometry(2, 3, height), ground_material, 0);
+        borderLeft.position.x = -width / 2 - 1;
+        borderLeft.position.y = 2;
+        ground.add(borderLeft);
+
+        var borderRight = new Physijs.BoxMesh(new THREE.BoxGeometry(2, 3, height), ground_material, 0);
+        borderRight.position.x = width / 2 + 1;
+        borderRight.position.y = 2;
+        ground.add(borderRight);
+
+        var borderBottom = new Physijs.BoxMesh(new THREE.BoxGeometry(width + 4, 3, 2), ground_material, 0);
+        borderBottom.position.z = height / 2 + 1;
+        borderBottom.position.y = 2;
+        ground.add(borderBottom);
+
+        var borderTop = new Physijs.BoxMesh(new THREE.BoxGeometry(width + 4, 3, 2), ground_material, 0);
+        borderTop.position.z = -height / 2 - 1;
+        borderTop.position.y = 2;
+        ground.add(borderTop);
+        if (this.editormode) {
+            this.editor.objects.push(ground);
+            this.editor.ground = ground;
+        }
+
+        this.scene.add(ground);
+    },
     getVelocityInfo: function(dir) {
         switch (dir) {
             case CONTROL.UP: return { x: 0, z: -1 , ay : 0.0 };
@@ -811,13 +840,44 @@ Game.prototype = {
         var self = this;
 
         function mouseMoveListener(event) {
-            if (event.buttons) {
-                //scene.rotation.y += event.movementX/100;
-                //var relativeLocation = event.pageX/window.innerWidth-0.5;
-                //paddle.position.z = relativeLocation*width * 2;
-                //console.dir(event);
-                //console.dir(paddle);
+            event.preventDefault();
+
+            if (self.editor.curobject) {
+                self.mouse.set((event.clientX / window.innerWidth) * 2 - 1, - (event.clientY / window.innerHeight) * 2 + 1);
+
+                self.raycaster.setFromCamera(self.mouse, self.camera);
+
+                var intersects = self.raycaster.intersectObjects(self.editor.objects);
+                
+                intersects.forEach(function(intersect) {
+                    if (intersect.object=self.editor.ground) {
+                        var gpos = self.map.getGridPosition(intersect.point.x,intersect.point.z);
+                        var pos = self.map.getPosition(gpos.i,gpos.j);
+						self.editor.curobject.position.copy(pos);
+                    }
+                });
+
             }
+        }
+        
+        function mouseDownListener(event) {
+            event.preventDefault();
+            if (self.editor.curobject) {
+
+				self.mouse.set( ( event.clientX / window.innerWidth ) * 2 - 1, - ( event.clientY / window.innerHeight ) * 2 + 1 );
+
+				self.raycaster.setFromCamera( self.mouse, self.camera );
+
+				var intersects = self.raycaster.intersectObjects( self.editor.objects );
+                
+                intersects.forEach(function(intersect) {
+                    if (intersect.object=self.editor.ground) {
+                        var gpos = self.map.getGridPosition(intersect.point.x,intersect.point.z);
+                        self.addObject(gpos.i,gpos.j,self.editor.type);
+                    }
+                });
+            }
+
         }
 
         function keyDownListener(event) {
@@ -858,7 +918,41 @@ Game.prototype = {
         }, false );
 
         domElement.setAttribute("tabindex", 0);
-        //domElement.addEventListener("mousemove",mouseMoveListener,false);
+        if (self.editormode) {
+            domElement.addEventListener("mousemove",mouseMoveListener,false);
+            domElement.addEventListener("mousedown",mouseDownListener,false);
+        }
+        //
+    },
+    setEditorType: function (type) {
+        
+        if (this.editor.type != type) {
+            this.editor.type=type;
+            if (this.editor.curobject)
+            this.scene.remove(this.editor.curobject);
+            this.addEditorObject();
+        }
+    },
+    addEditorObject: function () {
+        var object = null;
+        switch (this.editor.type) {
+            case CONST.WALL:
+            case CONST.STONE:
+                var wallGeometry = new THREE.BoxGeometry(BOXSIZE, BOXSIZE, BOXSIZE);
+                object = new THREE.Mesh(wallGeometry, this.editor.material);
+                break;
+            case CONST.ENEMY:
+                object = new THREE.Mesh(this.tank.geometry, this.editor.material);
+                var scale = 3.0 / 300;//401.4057951126266;
+                //console.log(mesh.geometry.boundingSphere.radius);
+                object.scale.set(scale, scale, scale);
+
+                break;
+            default:
+                return;
+        }
+        this.scene.add(object);
+        this.editor.curobject = object;
     },
     findNearestEnemy: function (avatar) {
         var enemy = null, mdist=null;
@@ -952,6 +1046,9 @@ Game.prototype = {
         var config=this.config.map;
         if (map instanceof Array) {
             this.map.loadMap(map);
+        } else if (map=='Custom') {
+            this.map.generateEmptyMap(config.rows,config.columns);
+            this.editormode = true;
         } else {
             this.map.generateMap(config.rows,config.columns,config.enemyCount,config.wallRatio,config.stoneRatio);
         }
@@ -960,7 +1057,7 @@ Game.prototype = {
         this.initScene();
         
         this.running = true;
-        this.map.createGround(this.scene);
+        this.createGround(this.scene);
         this.clock = new THREE.Clock();
         var self = this;
         this.loadModels(function() {
@@ -970,43 +1067,47 @@ Game.prototype = {
         var gameover= 0.0;
         self.clock.start();
         render = function () {
-            
-            var dt=self.clock.getDelta();
-            if (self.gameOver !=0) gameover +=dt;
-            if (self.running && self.gameOver == 1 && gameover > 2.0) {
-                cancelAnimationFrame(self.id);
-                self.scene=null;
-                self.renderer=null;
-                self.running = false;
-                alert("You Win");
-            } else if (self.running && self.gameOver == 2 && gameover > 2.0) {
-                cancelAnimationFrame(self.id);
-                self.renderer=null;
-                self.scene=null;
-                self.running = false;
-                alert("Game Over");
-            } else {
-                self.id=requestAnimationFrame(render);
+            if (self.editormode) {
+                self.id = requestAnimationFrame(render);
                 self.renderer.render(self.scene, self.camera);
-                self.render_stats.update();
-                self.scene.simulate(undefined, 1);
-                
-                self.particleGroup.tick( dt );
-                if (self.player) {
-                self.camera.position.x=self.player.position.x;
-                self.camera.position.z=self.player.position.z+40;
-                self.camera.lookAt(self.player.position);
-                self.camera.updateProjectionMatrix();
+            } else {
+                var dt = self.clock.getDelta();
+                if (self.gameOver != 0) gameover += dt;
+                if (self.running && self.gameOver == 1 && gameover > 2.0) {
+                    cancelAnimationFrame(self.id);
+                    self.scene = null;
+                    self.renderer = null;
+                    self.running = false;
+                    alert("You Win");
+                } else if (self.running && self.gameOver == 2 && gameover > 2.0) {
+                    cancelAnimationFrame(self.id);
+                    self.renderer = null;
+                    self.scene = null;
+                    self.running = false;
+                    alert("Game Over");
+                } else {
+                    self.id = requestAnimationFrame(render);
+                    self.renderer.render(self.scene, self.camera);
+                    self.render_stats.update();
+                    self.scene.simulate(undefined, 1);
+
+                    self.particleGroup.tick(dt);
+                    if (self.player) {
+                        self.camera.position.x = self.player.position.x;
+                        self.camera.position.z = self.player.position.z + 40;
+                        self.camera.lookAt(self.player.position);
+                        self.camera.updateProjectionMatrix();
+                    }
+                    lastupdate += dt;
+                    if (self.updateRequired || lastupdate > 0.3 && self.clock.getElapsedTime() > 2.0) {
+                        self.updateRequired = false;
+                        self.updateGameState();
+                        lastupdate = 0.0;
+
+                    }
                 }
-                lastupdate += dt;
-                if (self.updateRequired || lastupdate > 0.3 && self.clock.getElapsedTime() > 2.0) {
-                    self.updateRequired = false;
-                self.updateGameState();
-                lastupdate=0.0;
-                
-                }
+
             }
-            
         }
         requestAnimationFrame(render);
         });
