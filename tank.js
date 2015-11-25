@@ -565,23 +565,22 @@ Game.prototype = {
         var self=this;
         var loader = new THREE.ColladaLoader();
         loader.load("/daes/FV510_Warrior/fv510.dae", function (result) {
-            var tankmodel=result.scene.children;
-            tankmodel[0].children[0].position.copy(tankmodel[0].position);
-            tankmodel[1].children[0].position.copy(tankmodel[1].position);
-            self.tank= {body:tankmodel[0].children[0],
-            track:tankmodel[1].children[0]
+            var tankmodel=result.scene.children[0].children[0];
+            self.tank= {geometry:tankmodel.geometry,
+            material:Physijs.createMaterial(tankmodel.material,
+                        0, 0)
                 
             };
-            var manager = new THREE.LoadingManager();
-			var loader = new THREE.ColladaLoader();
-			loader.load("/daes/T-90/T90l.dae",function (result){
+			//var loader = new THREE.ColladaLoader();
+			loader.load("/daes/FV510_Warrior/enemy.dae",function (result){
 				var tankmodel=result.scene.children[0].children[0];
 				console.log(tankmodel);
 				self.tank2={geometry:tankmodel.geometry,
 					material:Physijs.createMaterial(tankmodel.material,0,0)
 				};
+                var manager = new THREE.LoadingManager();
 				var loader = new THREE.OBJLoader(manager);
-				loader.load( '/models/bullet.obj', function ( object ) {
+				loader.load( '/assets/models/bullet.obj', function ( object ) {
 					object.traverse(function(child){
 						if (child instanceof THREE.Mesh){
 							self.bullet = child;
@@ -681,11 +680,7 @@ Game.prototype = {
             self.collisionSound.setRefDistance(40);
             self.collisionSound.setRolloffFactor(2);
 
-            var player = new Character(this.tank.body.geometry, this.tank.body.material,CONST.PLAYER);
-            player.position.copy(this.tank.body.position);
-            //var track=new THREE.Mesh(this.tank.track.geometry,this.tank.track.material);
-            //track.position.copy(this.tank.track.position);
-             player.add(track);
+            var player = new Character(this.tank.geometry, this.tank.material,CONST.PLAYER);
             //console.log(mesh.geometry);
             //console.log(mesh.geometry.boundingSphere);
             var scale=3.0/310;//401.4057951126266;
@@ -735,16 +730,17 @@ Game.prototype = {
 
         var enemy = null;
         if (config.gametype == CONST.ENEMY) {
-            enemy =  new Character(this.tank.body.geometry, this.tank.body.material, CONST.ENEMY);
+            enemy =  new Character(this.tank.geometry, this.tank.material, CONST.ENEMY);
+            var scale = 3.0 / 310;
+            enemy.scale.set(scale, scale, scale);
             this.enemycount++;
         } else {
-            enemy = new Character(this.tank.body.geometry, this.tank.body.material, CONST.ALLY);
-            
-        }
-       // enemy.add(new Physijs.BoxMesh(this.tank.track.geometry,this.tank.track.material));
-            
-        var scale = 3.0 / 310;
+            enemy = new Character(this.tank.geometry, this.tank.material, CONST.ALLY);
+            var scale = 3.0 / 310;
             enemy.scale.set(scale, scale, scale);
+        }
+            
+        
         //401.4057951126266;
         //console.log(mesh.geometry.boundingSphere.radius);
         
