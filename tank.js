@@ -571,16 +571,16 @@ Game.prototype = {
                         0, 0)
                 
             };
-            var manager = new THREE.LoadingManager();
-			var loader = new THREE.ColladaLoader();
-			loader.load("/daes/T-90/T90l.dae",function (result){
+			//var loader = new THREE.ColladaLoader();
+			loader.load("/daes/FV510_Warrior/enemy.dae",function (result){
 				var tankmodel=result.scene.children[0].children[0];
 				console.log(tankmodel);
 				self.tank2={geometry:tankmodel.geometry,
 					material:Physijs.createMaterial(tankmodel.material,0,0)
 				};
+                var manager = new THREE.LoadingManager();
 				var loader = new THREE.OBJLoader(manager);
-				loader.load( '/models/bullet.obj', function ( object ) {
+				loader.load( '/assets/models/bullet.obj', function ( object ) {
 					object.traverse(function(child){
 						if (child instanceof THREE.Mesh){
 							self.bullet = child;
@@ -730,7 +730,7 @@ Game.prototype = {
 
         var enemy = null;
         if (config.gametype == CONST.ENEMY) {
-            enemy =  new Character(this.tank.geometry, this.tank.material, CONST.ENEMY);
+            enemy =  new Character(this.tank2.geometry, this.tank2.material, CONST.ENEMY);
             var scale = 3.0 / 310;
             enemy.scale.set(scale, scale, scale);
             this.enemycount++;
