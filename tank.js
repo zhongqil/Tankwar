@@ -515,6 +515,20 @@ Game.prototype = {
         this.scene.add(light);
 
 
+        // mirror box
+        this.cubeCamera = new THREE.CubeCamera( 1, 100, 128 );
+        var chromeMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, envMap: this.cubeCamera.renderTarget } );
+        //var shader = THREE.ShaderLib[ "cube" ];
+        //shader.uniforms[ "tCube" ].value = textureCube;
+        this.reflectBox = new THREE.Mesh(new THREE.SphereGeometry(5,5,5), chromeMaterial);
+        this.reflectBox.position.y = 2;
+        //ball = new THREE.Mesh( new THREE.SphereGeometry(10,10,10), chromeMaterial );
+        //ball.position.y = 1;
+        this.scene.add(this.cubeCamera);
+        this.scene.add(this.reflectBox);
+        //this.scene.add(ball);
+
+
 
         this.particleGroup = new SPE.Group({
             texture: {
@@ -1342,6 +1356,14 @@ Game.prototype = {
                         lastupdate = 0.0;
 
                     }
+                }
+
+                self.cubeCamera.position.copy( self.reflectBox.position );
+                self.cubeCamera.rotation.copy( self.reflectBox.rotation);
+                self.reflectBox.visible = false ;
+                if (self.scene){
+                    self.cubeCamera.updateCubeMap( self.renderer, self.scene );
+                    self.reflectBox.visible = true ;
                 }
 
             }
