@@ -516,9 +516,10 @@ Game.prototype = {
 
 
         /* mirror box */
-        this.cubeCamera = new THREE.CubeCamera( 1, 100, 128 );
+        this.cubeCamera = new THREE.CubeCamera( 1, 100000, 128 );
         var chromeMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, envMap: this.cubeCamera.renderTarget } );
-        this.reflectBox = new THREE.Mesh(new THREE.SphereGeometry(5,5,5), chromeMaterial);
+        //this.reflectBox = new THREE.Mesh(new THREE.SphereGeometry(5,5,5), chromeMaterial); //Sphere
+        this.reflectBox = new THREE.Mesh(new THREE.BoxGeometry(5,5,5), chromeMaterial);  //Box
         this.reflectBox.position.y = 2;
         this.scene.add(this.cubeCamera);
         this.scene.add(this.reflectBox);
