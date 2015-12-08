@@ -34,14 +34,14 @@ Levels = {
     Random: "Random",
     Maze :  [
             [2,0,0,0,0,0,0,0,0,0],
-            [4,4,4,4,4,4,4,4,4,0],
-            [0,0,0,0,0,0,0,0,4,0],
-            [0,4,4,4,4,4,4,0,4,0],
-            [0,4,0,0,3,3,4,0,4,0],
-            [0,4,0,4,3,3,4,0,4,0],
-            [0,4,0,4,4,4,4,0,4,0],
-            [0,4,0,0,0,0,0,0,4,0],
-            [0,4,4,4,4,4,4,4,4,0],
+            [5,5,5,5,5,5,5,5,5,0],
+            [0,0,0,0,0,0,0,0,5,0],
+            [0,5,5,5,5,5,5,0,5,0],
+            [0,5,0,0,3,3,5,0,5,0],
+            [0,5,0,5,3,3,5,0,5,0],
+            [0,5,0,5,5,5,5,0,5,0],
+            [0,5,0,0,0,0,0,0,5,0],
+            [0,5,5,5,5,5,5,5,5,0],
             [0,0,0,0,0,0,0,0,0,0]
         ]
     ,
@@ -350,7 +350,7 @@ GameObject.prototype.constructor = GameObject;
 
 function Character(geometry, material,gametype,controller) {
     this.isAlive = true;
-    Physijs.BoxMesh.call(this, geometry, material, 0.2);
+    Physijs.BoxMesh.call(this, geometry, material, 100);
     this.gametype = gametype;
     this.controller = controller;
     this.lastdirection = CONTROL.STOP;
