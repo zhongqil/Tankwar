@@ -515,18 +515,40 @@ Game.prototype = {
         this.scene.add(light);
 
 
-        // mirror box
+        /* mirror box */
         this.cubeCamera = new THREE.CubeCamera( 1, 100, 128 );
         var chromeMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, envMap: this.cubeCamera.renderTarget } );
-        //var shader = THREE.ShaderLib[ "cube" ];
-        //shader.uniforms[ "tCube" ].value = textureCube;
         this.reflectBox = new THREE.Mesh(new THREE.SphereGeometry(5,5,5), chromeMaterial);
         this.reflectBox.position.y = 2;
-        //ball = new THREE.Mesh( new THREE.SphereGeometry(10,10,10), chromeMaterial );
-        //ball.position.y = 1;
         this.scene.add(this.cubeCamera);
         this.scene.add(this.reflectBox);
-        //this.scene.add(ball);
+
+        /* skybox */
+        var path = "/Park3Med/";
+        var format = '.jpg';
+        var urls = [
+            path + 'px' + format, path + 'nx' + format,
+            path + 'py' + format, path + 'ny' + format,
+            path + 'pz' + format, path + 'nz' + format
+        ];
+
+        var textureCube = THREE.ImageUtils.loadTextureCube( urls );
+
+        var shader = THREE.ShaderLib[ "cube" ];
+        shader.uniforms[ "tCube" ].value = textureCube;
+
+        var material = new THREE.ShaderMaterial( {
+
+            fragmentShader: shader.fragmentShader,
+            vertexShader: shader.vertexShader,
+            uniforms: shader.uniforms,
+            depthWrite: false,
+            side: THREE.BackSide
+        });
+                     
+
+        mesh = new THREE.Mesh( new THREE.BoxGeometry( 1000, 1000, 1000 ), material );
+        this.scene.add(mesh);
 
 
 
