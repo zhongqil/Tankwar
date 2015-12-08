@@ -730,12 +730,12 @@ Game.prototype = {
 
         var enemy = null;
         if (config.gametype == CONST.ENEMY) {
-            enemy =  new Character(this.tank.geometry, this.tank.material, CONST.ENEMY);
+            enemy =  new Character(this.tank2.geometry, this.tank2.material, CONST.ENEMY);
             var scale = 3.0 / 310;
             enemy.scale.set(scale, scale, scale);
             this.enemycount++;
         } else {
-            enemy = new Character(this.tank.geometry, this.tank.material, CONST.ALLY);
+            enemy = new Character(this.tank2.geometry, this.tank2.material, CONST.ALLY);
             var scale = 3.0 / 310;
             enemy.scale.set(scale, scale, scale);
         }
