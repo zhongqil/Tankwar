@@ -525,7 +525,7 @@ Game.prototype = {
         this.scene.add(this.reflectBox);
 
         /* skybox */
-        var path = "Park3Med/";
+        var path = "/Park3Med/";
         var format = '.jpg';
         var urls = [
             path + 'brickwall' + format, path + 'brickwall' + format,
@@ -550,7 +550,7 @@ Game.prototype = {
 
         mesh = new THREE.Mesh( new THREE.BoxGeometry( 92.5, 100, 92.5 ), material );
 		mesh.position.set(0,50,0);
-        this.scene.add(mesh);s
+        this.scene.add(mesh);
 
         this.particleGroup = new SPE.Group({
             texture: {
