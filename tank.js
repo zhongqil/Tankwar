@@ -528,9 +528,9 @@ Game.prototype = {
         var path = "/Park3Med/";
         var format = '.jpg';
         var urls = [
-            path + 'valley_rt' + format, path + 'valley_lf' + format,
-            path + 'valley_up' + format, path + 'valley_dn' + format,
-            path + 'valley_bk' + format, path + 'valley_ft' + format
+            path + 'kenon_star_rt' + format, path + 'kenon_star_lf' + format,
+            path + 'kenon_star_up' + format, path + 'kenon_star_dn' + format,
+            path + 'kenon_star_bk' + format, path + 'kenon_star_ft' + format
         ];
 
         var textureCube = THREE.ImageUtils.loadTextureCube( urls );
@@ -548,7 +548,7 @@ Game.prototype = {
         });
                      
 
-        mesh = new THREE.Mesh( new THREE.BoxGeometry( 92.5, 50, 92.5 ), material );
+        mesh = new THREE.Mesh( new THREE.BoxGeometry( 920.5, 500, 920.5 ), material );
 		//mesh = new THREE.Mesh( new THREE.BoxGeometry( 1000, 1000, 1000 ), material );
 		mesh.position.set(0,25,0);
         this.scene.add(mesh);
