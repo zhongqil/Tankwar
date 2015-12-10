@@ -525,12 +525,12 @@ Game.prototype = {
         this.scene.add(this.reflectBox);
 
         /* skybox */
-        var path = "/Park3Med/";
+        var path = "Park3Med/";
         var format = '.jpg';
         var urls = [
-            path + 'px' + format, path + 'nx' + format,
-            path + 'py' + format, path + 'ny' + format,
-            path + 'pz' + format, path + 'nz' + format
+            path + 'brickwall' + format, path + 'brickwall' + format,
+            path + 'brickwall' + format, path + 'brickwall' + format,
+            path + 'brickwall' + format, path + 'brickwall' + format
         ];
 
         var textureCube = THREE.ImageUtils.loadTextureCube( urls );
@@ -548,10 +548,9 @@ Game.prototype = {
         });
                      
 
-        mesh = new THREE.Mesh( new THREE.BoxGeometry( 1000, 1000, 1000 ), material );
-        this.scene.add(mesh);
-
-
+        mesh = new THREE.Mesh( new THREE.BoxGeometry( 92.5, 100, 92.5 ), material );
+		mesh.position.set(0,50,0);
+        this.scene.add(mesh);s
 
         this.particleGroup = new SPE.Group({
             texture: {
