@@ -1,3 +1,4 @@
+/* global THREE */
 
 Array.prototype.shuffle = function () {
     var counter = this.length, temp, index;
@@ -27,7 +28,7 @@ if (index > -1) {
 }
 }
 BOXSIZE = 6.0;
-CONST = { EMPTY: 0, WALL: 1, PLAYER: 2, ENEMY: 3, ALLY:4, STONE: 5, BULLET: 6 }
+CONST = { EMPTY: 0, WALL: 1, PLAYER: 2, ENEMY: 3, ALLY:4, STONE: 5, MIRROR: 6, BULLET: 128, WATER:256 }
 CONTROL = { NOACTION: 0, UP: 1, DOWN: 2, LEFT: 3, RIGHT: 4, STOP:5, SHOOT: 6 }
 
 Levels = {
@@ -126,7 +127,8 @@ Map.prototype = {
         this.map[i * this.rows + j] = t;
     },
     isWall: function(i,j) {
-        return (this.isgrid ? this.map[j][i] : this.map[i * this.rows + j])==CONST.STONE;
+        var type=(this.isgrid ? this.map[j][i] : this.map[i * this.rows + j]);
+        return type==CONST.STONE || type == CONST.MIRROR;
     },
     distance: function (p1,p2) {
         return Math.abs(p1.i-p2.i)+Math.abs(p1.j-p2.j);
@@ -137,7 +139,8 @@ Map.prototype = {
             if (i == 0) tmp[i] = CONST.PLAYER;
             else if (i <= enemy) tmp[i] = CONST.ENEMY;
             else if (i <= enemy+ally) tmp[i] = CONST.ALLY;
-            else tmp[i] = Math.random() < wallsratio ? (Math.random() < stoneratio ? CONST.STONE : CONST.WALL) : CONST.EMPTY;
+            else if (i == enemy+ally+1) tmp[i] = CONST.MIRROR;
+            else tmp[i] = Math.random() < wallsratio ? (Math.random() < stoneratio ? CONST.STONE : CONST.WALL) : (Math.random() < 0.1 ? CONST.WATER : CONST.EMPTY);
         }
         this.map = tmp.shuffle();
         this.rows = r;
@@ -166,7 +169,7 @@ Map.prototype = {
           closest:true,
           isWall:function (node) {
               var type=self.getType(node.x,node.y);
-              return type==CONST.STONE;
+              return type==CONST.STONE || type ==CONST.MIRROR;
               },
           getCost:function (node) {
               var type=self.getType(node.x,node.y)
@@ -190,6 +193,18 @@ Map.prototype = {
             tmp[i] = []
             for (var j = 0; j < this.cols; j++) {
                 tmp[i][j] = this.getType(j,i);
+            }
+        }
+        return tmp;
+    },
+    toTerrainArray: function() {
+        var tmp= [];
+        var n=0;
+        for (var i = 0; i < this.rows; i++) {
+            for (var j = 0; j < this.cols; j++) {
+                tmp[n] = this.getType(i,j)== 256 ? 1 : 0;
+               // tmp[n] = j==0 ? 1 : 0;
+                n++;
             }
         }
         return tmp;
@@ -374,6 +389,7 @@ function Game() {
     this.player = null;
     this.pathgraph = null;
     this.editormode = false;
+    this.isfirstperson = false;
     this.editor = {
         objects: [],
         type: CONST.EMPTY
@@ -395,6 +411,11 @@ function Game() {
         stone: {
             strength: 2,
             type: CONST.STONE,
+            health: 30
+        },
+        mirror: {
+            strength: 2,
+            type: CONST.MIRROR,
             health: 30
         },
         bullet: {
@@ -513,16 +534,27 @@ Game.prototype = {
 
 
         this.scene.add(light);
+        
+        var camControls = new THREE.FirstPersonControls(this.camera);
+        camControls.lookSpeed = 0.4;
+        camControls.movementSpeed = 20;
+        camControls.noFly = true;
+        camControls.lookVertical = true;
+        camControls.constrainVertical = true;
+        camControls.verticalMin = 1.0;
+        camControls.verticalMax = 2.0;
+        camControls.lon = -150;
+        camControls.lat = 120;
+        
+        this.fpControls = camControls;
 
 
         /* mirror box */
-        this.cubeCamera = new THREE.CubeCamera( 1, 100000, 128 );
-        var chromeMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, envMap: this.cubeCamera.renderTarget } );
+        this.cubeCamera = new THREE.CubeCamera( 1, 10000, 256 );
+        this.chromeMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, envMap: this.cubeCamera.renderTarget } );
         //this.reflectBox = new THREE.Mesh(new THREE.SphereGeometry(5,5,5), chromeMaterial); //Sphere
-        this.reflectBox = new THREE.Mesh(new THREE.BoxGeometry(5,5,5), chromeMaterial);  //Box
-        this.reflectBox.position.y = 2;
+        
         this.scene.add(this.cubeCamera);
-        this.scene.add(this.reflectBox);
 
         /* skybox */
         var path = "/Park3Med/";
@@ -548,10 +580,10 @@ Game.prototype = {
         });
                      
 
-        mesh = new THREE.Mesh( new THREE.BoxGeometry( 920.5, 500, 920.5 ), material );
-		//mesh = new THREE.Mesh( new THREE.BoxGeometry( 1000, 1000, 1000 ), material );
-		mesh.position.set(0,25,0);
+        mesh = new THREE.Mesh( new THREE.BoxGeometry( 1000, 1000, 1000 ), material );
         this.scene.add(mesh);
+
+
 
         this.particleGroup = new SPE.Group({
             texture: {
@@ -596,6 +628,8 @@ Game.prototype = {
             this.editor.redmaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: 0.5, transparent: true });
             this.editor.overlap = false;
         }
+
+        alert(' When in game, press TAB to activate the tank.');
 
     },
     loadModels: function (callback) {
@@ -649,6 +683,10 @@ Game.prototype = {
                         obj = this.createWall(i,j,this.config.stone);
                         
                         break;
+                    case CONST.MIRROR:
+                        obj = this.createWall(i,j,this.config.mirror);
+                        this.reflectBox = obj;
+                        break;
                     case CONST.PLAYER:
                         obj = this.createPlayer(i,j,this.config.player);
                         
@@ -679,6 +717,7 @@ Game.prototype = {
         switch (obj.gametype) {
                     case CONST.WALL:
                     case CONST.STONE:
+                    case CONST.MIRROR:
                         this.removeWall(obj);
                         
                         break;
@@ -772,7 +811,7 @@ Game.prototype = {
             enemy.scale.set(scale, scale, scale);
             this.enemycount++;
         } else {
-            enemy = new Character(this.tank2.geometry, this.tank2.material, CONST.ALLY);
+            enemy = new Character(this.tank.geometry, this.tank.material, CONST.ALLY);
             var scale = 3.0 / 310;
             enemy.scale.set(scale, scale, scale);
         }
@@ -806,7 +845,7 @@ Game.prototype = {
     createWall: function (i,j,config) {
         var wallGeometry = new THREE.BoxGeometry(BOXSIZE, BOXSIZE, BOXSIZE);
         var wallmaterial = Physijs.createMaterial(
-                    new THREE.MeshPhongMaterial({ map: config.type==CONST.WALL ? THREE.ImageUtils.loadTexture('/assets/textures/general/brick_1.jpg') 
+                    config.type==CONST.MIRROR ? this.chromeMaterial : new THREE.MeshPhongMaterial({ map: config.type==CONST.WALL ? THREE.ImageUtils.loadTexture('/assets/textures/general/brick_1.jpg') 
                     : THREE.ImageUtils.loadTexture('/assets/textures/general/stone.jpg') }),
                     .9, 0);
 
@@ -864,9 +903,9 @@ Game.prototype = {
                     if (this.power >= wall.strength)
                         wall.health -= this.damage;
                     if (wall.health <= 0) {
-                        self.particleGroup.triggerPoolEmitter(1, this.position);
                         self.removeWall(wall);
                     }
+                    self.particleGroup.triggerPoolEmitter(1, this.position);
                     break;
                 case CONST.BULLET:
                     if (other_object.owner === this.owner) return;
@@ -879,20 +918,20 @@ Game.prototype = {
                     player.health -= this.damage;
                     self.health.value = player.health;
                     if (player.health <= 0) {
-                        self.particleGroup.triggerPoolEmitter(1, this.position);
                         self.gameOver = 2;
                         self.removePlayer();
                     }
+                    self.particleGroup.triggerPoolEmitter(1, this.position);
                     break;
                 case CONST.ENEMY:
                 case CONST.ALLY:
                     var enemy = other_object;
                     enemy.health -= this.damage;
                     if (enemy.health <= 0) {
-                        self.particleGroup.triggerPoolEmitter(1, this.position);
                         self.removeNPC(enemy);
                         if (self.enemycount == 0) self.gameOver = 1;
                     }
+                    self.particleGroup.triggerPoolEmitter(1, this.position);
                     break;
                 default:
                     break;
@@ -907,33 +946,65 @@ Game.prototype = {
     },
     createGround: function () {
         var ground_material = Physijs.createMaterial(
-            new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/ground/grasslight-big.jpg') }),
+            new THREE.MeshPhongMaterial({ map: THREE.ImageUtils.loadTexture('/assets/textures/general/stone.jpg') }),
             .2, .0);
+            
+        var grassImage = THREE.ImageUtils.loadTexture('/assets/textures/ground/grasslight-big.jpg');
+    grassImage.magFilter = THREE.NearestFilter;
+    
+    var waveImage = THREE.ImageUtils.loadTexture('/assets/textures/ground/water_texture.jpg');
+    waveImage.magFilter = THREE.NearestFilter;
+    var array = this.map.toTerrainArray();
+    console.log(array);
+    var uniforms = {
+        ambient: { type: "c", value: new THREE.Color(0x090909) },
+        diffuse: { type: "c", value: new THREE.Color(0xffffff) },
+        specular: { type: "c", value: new THREE.Color(0x00ff00) },
+        shininess: {type:"f",value:100.0, min:0.0, max:1023.0},
+        blinnphong: {type:"f",value:0.0, min:0.0, max:1.0},
+        terrainArray: {type:"iv1",value:array},
+        gtime: {type: "f", value: 10.0},
+		grass:{type: "t", value: grassImage},
+		wave:{type: "t", value: waveImage},
+		texLevel:{type:"f", min:0.0, max:1.0, value:1.0},
+        texWeight:{type:"f", min:0.0, max:1.0, value:0.5}
+    };
+    this.uniforms = uniforms;
+    var vertexShader = document.getElementById('vertexShader').text;
+    var fragmentShader = document.getElementById('fragmentShader').text;
+	
+    var material = new THREE.ShaderMaterial(
+        {
+          uniforms : uniforms,
+          vertexShader : vertexShader,
+          fragmentShader : fragmentShader,
+        });
         var width = this.map.width;
         var height = this.map.height;
-        var ground = new Physijs.BoxMesh(new THREE.BoxGeometry(width, 2, height), ground_material, 0);
-        ground.position.y = -1;
+        var ground=new Physijs.PlaneMesh(new THREE.PlaneGeometry(width, height,100,100), material, 0);
+        ground.rotateX(-3.141592*0.5);
 
 
-        var borderLeft = new Physijs.BoxMesh(new THREE.BoxGeometry(2, 3, height), ground_material, 0);
+
+        var borderLeft = new Physijs.BoxMesh(new THREE.BoxGeometry(3, 3, height), ground_material, 0);
         borderLeft.position.x = -width / 2 - 1;
         borderLeft.position.y = 2;
-        ground.add(borderLeft);
+        this.scene.add(borderLeft);
 
-        var borderRight = new Physijs.BoxMesh(new THREE.BoxGeometry(2, 3, height), ground_material, 0);
+        var borderRight = new Physijs.BoxMesh(new THREE.BoxGeometry(3, 3, height), ground_material, 0);
         borderRight.position.x = width / 2 + 1;
         borderRight.position.y = 2;
-        ground.add(borderRight);
+        this.scene.add(borderRight);
 
-        var borderBottom = new Physijs.BoxMesh(new THREE.BoxGeometry(width + 4, 3, 2), ground_material, 0);
+        var borderBottom = new Physijs.BoxMesh(new THREE.BoxGeometry(width + 4, 3, 3), ground_material, 0);
         borderBottom.position.z = height / 2 + 1;
         borderBottom.position.y = 2;
-        ground.add(borderBottom);
+        this.scene.add(borderBottom);
 
-        var borderTop = new Physijs.BoxMesh(new THREE.BoxGeometry(width + 4, 3, 2), ground_material, 0);
+        var borderTop = new Physijs.BoxMesh(new THREE.BoxGeometry(width + 4, 3, 3), ground_material, 0);
         borderTop.position.z = -height / 2 - 1;
         borderTop.position.y = 2;
-        ground.add(borderTop);
+        this.scene.add(borderTop);
         if (this.editormode) {
             this.editor.objects.push(ground);
             this.editor.ground = ground;
@@ -1081,6 +1152,8 @@ Game.prototype = {
                 }
 
             } else {
+                if (event.keyCode==KeyMapping.V)
+                    self.isfirstperson = !self.isfirstperson;
                 for (var i = 0; i < self.humancontrollers.length; i++) {
                     var controller = self.humancontrollers[i]
                     if (controller.avatar.health > 0) {
@@ -1153,6 +1226,7 @@ Game.prototype = {
         switch (this.editor.type) {
             case CONST.WALL:
             case CONST.STONE:
+            case CONST.MIRROR:
                 var wallGeometry = new THREE.BoxGeometry(BOXSIZE, BOXSIZE, BOXSIZE);
                 object = new THREE.Mesh(wallGeometry, this.editor.material);
                 break;
@@ -1192,7 +1266,7 @@ Game.prototype = {
     searchPath: function(avatar,enemy) {
         var path=this.map.search(avatar.gridposition,enemy.gridposition);
         
-        return {path:path,obscured:path[1]==undefined ? true : this.map.getType(path[1].x,path[1].y) == CONST.WALL || this.map.getType(path[1].x,path[1].y) == CONST.STONE,nextdir:this.getDirection(path[0],path[1])};
+        return {path:path,obscured:path[1]==undefined ? true : this.map.getType(path[1].x,path[1].y) == CONST.WALL || this.map.isWall(path[1].x,path[1].y) ,nextdir:this.getDirection(path[0],path[1])};
     },
     getDirection: function(pos1,pos2) {
         if (!pos2) return CONTROL.STOP;
@@ -1282,6 +1356,7 @@ Game.prototype = {
                     this.ctx.fillStyle = "#0000ff";
                     break;
                     case CONST.WALL:
+                    case CONST.MIRROR:
                     this.ctx.fillStyle = "#c0c0c0";
                     break;
                     case CONST.STONE:
@@ -1342,6 +1417,7 @@ Game.prototype = {
                 self.renderer.render(self.scene, self.camera);
             } else {
                 var dt = self.clock.getDelta();
+                self.uniforms.gtime.value += 0.5;
                 if (self.gameOver != 0) gameover += dt;
                 if (self.running && self.gameOver == 1 && gameover > 2.0) {
                     cancelAnimationFrame(self.id);
@@ -1367,10 +1443,16 @@ Game.prototype = {
 
                     self.particleGroup.tick(dt);
                     if (self.player) {
-                        self.camera.position.x = self.player.position.x;
-                        self.camera.position.z = self.player.position.z + 40;
-                        self.camera.lookAt(self.player.position);
-                        self.camera.updateProjectionMatrix();
+                        if (self.isfirstperson) {
+                            self.camera.position.copy( self.player.position );
+                            self.camera.position.y = self.player.position.y + 10;
+                            self.fpControls.update(dt);
+                        } else {
+                            self.camera.position.x = self.player.position.x;
+                            self.camera.position.z = self.player.position.z + 40;
+                            self.camera.lookAt(self.player.position);
+                            self.camera.updateProjectionMatrix();
+                        }
                     }
                     lastupdate += dt;
                     if (self.updateRequired || lastupdate > 0.3 && self.clock.getElapsedTime() > 2.0) {

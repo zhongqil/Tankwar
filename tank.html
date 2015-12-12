@@ -22,12 +22,128 @@
     <script type="text/javascript" src="/libs/astar.js"></script>
     <script type="text/javascript" src="/libs/SPE.min.js"></script>
     <script type="text/javascript" src="/libs/OBJLoader.js"></script>
+    <script type="text/javascript" src="/libs/FirstPersonControls.js"></script>
     <script type="text/javascript" src="/tank.js"></script>
 
 
 </head>
 
 <body>
+    <script id="vertexShader" type="x-shader/x-vertex">
+// This vertex shader draws a sphere using parameterized lattitude/longitude coordinates
+// the normal is (fx,fy,1)
+varying vec3 N;
+varying vec3 v;
+varying vec3 light;
+varying vec2 vUv;
+
+void main(void)  
+{     
+    vUv = uv;
+
+    vec3 vertex = position; // position is a built-in variable, always available
+
+    N = normalize(normalMatrix*normal); // normal is a built-i variable, always available
+   //vec4 v4 = modelViewMatrix*vec4(vertex,1.0);
+   v = vertex;
+   
+   // next we calculate the light position in world Coordinates relative to the sphere
+   vec4 lightInRelCoords = vec4(500.0,100.0,500.0,1.0);
+   vec4 light4 = modelViewMatrix*lightInRelCoords;
+   light = light4.xyz;  
+  
+   // finally we return the position in projection coordinates
+   gl_Position = projectionMatrix * modelViewMatrix * vec4(vertex,1.0); 
+}  
+  </script>
+   <script id="fragmentShader" type="x-shader/x-fragment">
+// from the vertex shader and the rasterizer we get a pixel with
+// an interpolated normal
+varying vec3 N;
+// an interpolated position in world coordinates
+varying vec3 v; 
+// a light position in world coordinates
+varying vec3 light;
+// an interpolated texture coordinate in the range [0,1]x[0,1]
+varying vec2 vUv;
+uniform float gtime;
+
+// we also get several uniforms from the javascript program
+uniform sampler2D grass;  // a texture
+uniform sampler2D wave;  // a texture
+uniform vec3 ambient;     // colors for ambient, diffuse, and specular illumination
+uniform vec3 diffuse;
+uniform vec3 specular;
+uniform int terrainArray[ 225 ];
+uniform float shininess;  // the shininess of the specular light
+uniform float blinnphong; // 0.0 for phong, >0.0 for blinnphong
+uniform float texLevel;   // the fraction of pixel light coming from the texture
+uniform float texWeight;
+
+void main (void)  
+{  
+   
+   // illumination vectors
+   vec3 lightPos = light; 
+   vec3 position = v; // fragment position in world coordinates, with camera at (0,0,0)
+   vec3 eyeVector = normalize(cameraPosition - position);
+   vec3 lightVector = normalize(lightPos - position);
+   vec3 normal = normalize(N);
+   //int(floor((v.x + 15.0*6.0 / 2.0) / 6.0)) * 15 + int(floor((v.y +  15.0*6.0 / 2.0 ) / 6.0)) 
+   //
+   int index=int(floor((v.x + 15.0*6.0 / 2.0) / 6.0))*15 +  int(floor((-v.y +  15.0*6.0 / 2.0 ) / 6.0));
+
+
+   //ambient illumination
+   vec4 Iamb = vec4(0.1*ambient,1.0);
+   
+   // diffuse illumination
+   vec4 Idiff = vec4(diffuse,1.0) * 0.5 * max(dot(normal,lightVector), 0.0);
+      
+   //Phong illumination
+   vec3 reflection = normalize(-reflect(lightVector,normal));
+   float phong0 = max(dot(reflection,eyeVector),0.0);
+   float phong = pow(phong0, shininess);
+   
+   // Blinn-Phone illumination, you need to complete this one!
+   //float BP = phong; // modify this to be the Blinn-Phong illumination, 
+   vec3 halfvec = normalize(lightVector + eyeVector);
+   float BP0 = max(dot(normal,halfvec),0.0);
+   float BP = pow(BP0, shininess);
+   
+   // pick a model Phong or BlinnPhong for the specular illumination intensity, spec
+   float spec;
+   if (blinnphong==0.0) 
+       spec = phong;
+   else
+       spec = BP;
+   
+   // calculate the specular illumination
+   vec4 Ispec = spec*vec4(specular,1.0);
+   
+   // calculate the texture illumination
+   ;
+   float weight = 0.0;
+   for (int i=0; i<225; i++)
+{
+    if (i == index)
+    {
+          weight =  float(terrainArray[i]);
+          break;
+    }
+}
+//weight = float(index);
+   vec4 texColor1 = texture2D(grass,vUv);
+   vec2 vUv1 = vUv;
+   vUv1.x += gtime/100.0;
+   vUv1.x = vUv1.x-floor(vUv1.x);
+   vec4 texColor2 = texture2D(wave,vUv1);
+   vec4 texColor = weight*texColor2 + (1.0-weight)*texColor1;
+   
+   // average the texture with the standard lighting model, to get the fragment color
+   gl_FragColor = texLevel*texColor + (1.0-texLevel)*(Ispec + Idiff + Iamb); 
+}
+</script>
     <div id="viewport"></div>
     <progress style="bottom:0px;position:absolute;left:0;right:0;" id="health" value="100" max="100"></progress>
     <canvas style="bottom:20px;position:absolute;left:0;right:0;" id="minimap" width="150" height="150" />
